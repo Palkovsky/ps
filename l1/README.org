@@ -1,0 +1,4 @@
+* Uruchamianie
+  #+begin_src 
+   make run
+  #+end_src
