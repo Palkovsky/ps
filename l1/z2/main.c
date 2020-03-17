@@ -75,6 +75,7 @@ writer(void* data) {
     // Inform shared buff about new data available.
     pthread_cond_signal(&buff_update_cond);
 
+    usleep(random_time(1000));
   }
 
   free(data);
@@ -132,7 +133,7 @@ shared_buff(void* data) {
 
 // Reader thread function
 int
-redaer(void* data) {
+reader(void* data) {
   int i;
   int threadId = *(int*) data;
 
@@ -161,6 +162,8 @@ redaer(void* data) {
 
     // Inform shared buff about free space in rd_buff.
     pthread_cond_signal(&buff_update_cond);
+
+    usleep(random_time(1000));
   }
 
   free(data);
@@ -209,7 +212,7 @@ main(int argc, char* argv[]) {
       *threadId = i+1;
       rc = pthread_create(&readerThreads[i],
                           NULL,
-                          (void*) redaer,
+                          (void*) reader,
                           (void*) threadId);
 
       if (rc != 0) {
@@ -229,11 +232,6 @@ main(int argc, char* argv[]) {
       pthread_join(writerThreads[i], NULL);
       printf("WRITER(%d): Thread finished.\n", i+1);
     }
-
-
-    // Don't waint on shared buff thread.
-    // There's no use for it with no readers and writers.
-    // pthread_join(sharedBuffThread, NULL);
 
     return (0);
 }

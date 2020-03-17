@@ -102,7 +102,7 @@ writer(void* data) {
 
 // Reader thread function
 int
-redaer(void* data) {
+reader(void* data) {
   int i;
   int buff_idx;
   int threadId = *(int*) data;
@@ -170,7 +170,7 @@ main(int argc, char* argv[]) {
       *threadId = i+1;
       rc = pthread_create(&readerThreads[i],
                           NULL,
-                          (void*) redaer,
+                          (void*) reader,
                           (void*) threadId);
 
       if (rc != 0) {

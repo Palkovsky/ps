@@ -5,21 +5,23 @@
 #include<semaphore.h>
 
 #define WRITERS_COUNT  2
-#define WRITER_TURNS  10
-#define READERS_COUNT 5
+#define WRITER_TURNS  4
+#define READERS_COUNT 4
 #define READER_TURNS  4
 
 // Number of shared resources.
 #define BUFF_COUNT 3
 
+// States
 #define NO_LOCK 0
-#define LOCK_BY_WRITER 0xFF
+#define LOCK_BY_WRITER 1
 #define LOCK_BY_READER 2
 
+// Same as #3, but for multiple buffers.
 pthread_mutex_t readers_mutex[BUFF_COUNT] = { PTHREAD_MUTEX_INITIALIZER };
 pthread_mutex_t writers_mutex[BUFF_COUNT] = { PTHREAD_MUTEX_INITIALIZER };
 int readers_count[BUFF_COUNT] = { 0 };
-const int readers_max[BUFF_COUNT] = { 3, 2, 2 }; // hardcodex maximum values
+const int readers_max[BUFF_COUNT] = { 1, 2, 1 }; // hardcoded
 int buffers_status[BUFF_COUNT] = { NO_LOCK };
 
 // For awaiting on buffer release.
@@ -39,7 +41,7 @@ status(void) {
       printf("LOCK BY WRITER");
       break;
     default:
-      printf("LOCK BY READER. COUNT: %d", readers_count[i]);
+      printf("LOCK BY READER. COUNT: %d/%d", readers_count[i], readers_max[i]);
       break;
     }
     printf(", ");
@@ -75,20 +77,16 @@ try_lock_reader(void) {
     if (pthread_mutex_trylock(readers_mutex+i) != 0) {
       continue;
     }
-
     if(readers_count[i] >= readers_max[i]) {
       goto release_mutex;
     }
-
     readers_count[i]++;
     if(readers_count[i] != 1) {
       goto success;
     }
-
     if(pthread_mutex_trylock(writers_mutex+i) != 0) {
       goto decrement_count;
     }
-
     buffers_status[i] = LOCK_BY_READER;
     goto success;
 
@@ -151,7 +149,7 @@ writer(void* data) {
     status();
 
     buff_idx = -1;
-    usleep(random_time(1000));
+    usleep(random_time(3000));
   }
 
   free(data);
@@ -160,7 +158,7 @@ writer(void* data) {
 
 // Reader thread function
 int
-redaer(void* data) {
+reader(void* data) {
   int i;
   int buff_idx;
   int threadId = *(int*) data;
@@ -191,7 +189,7 @@ redaer(void* data) {
 
     buff_idx = -1;
 
-    usleep(random_time(1000));
+    usleep(random_time(3000));
   }
 
   free(data);
@@ -228,7 +226,7 @@ main(int argc, char* argv[]) {
       *threadId = i+1;
       rc = pthread_create(&readerThreads[i],
                           NULL,
-                          (void*) redaer,
+                          (void*) reader,
                           (void*) threadId);
 
       if (rc != 0) {
