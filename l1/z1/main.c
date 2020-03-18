@@ -5,6 +5,15 @@
 #include<pthread.h>
 #include<semaphore.h>
 
+/*
+  #1
+  
+  Multiple readers. One writer.
+
+  Multiple readers can access buffer at the same time.
+  Implementation of pseudocode from the website.
+ */
+
 #define WRITER_TURNS  3
 #define READERS_COUNT 2
 #define READER_TURNS  5
@@ -24,24 +33,24 @@ writer(void* data) {
   int threadId = *(int*) data;
 
   for (i = 0; i < WRITER_TURNS; i++) {
-    printf("WRITER(%d): Starting turn %d\n", threadId, i+1);
+    printf("WRITER(%d): Starting turn %d/%d.\n", threadId, i+1, WRITER_TURNS);
 
     // wait(writer_sem)
-    printf("WRITER(%d): Awaiting writer semaphore...\n", threadId);
-    int result = sem_wait(&writer_sem);
+    printf("WRITER(%d): Awaiting writer semaphore.\n", threadId);
 
+    int result = sem_wait(&writer_sem);
     if (result != 0) {
       fprintf(stderr, "WRITER(%d): Error occured during locking the semaphore.\n", threadId);
       exit (-1);
     } else {
 	    // Write
-	    printf("WRITER(%d): Started writing... %d/%d\n", threadId, i+1, WRITER_TURNS);
+	    printf("WRITER(%d): Started writing. %d/%d\n", threadId, i+1, WRITER_TURNS);
 	    fflush(stdout);
 	    usleep(random_time(2000));
 	    printf("WRITER(%d): Write %d/%d finished.\n", threadId, i+1, WRITER_TURNS);
 
       // release(writer_sem)
-      printf("WRITER(%d): Releasing writer semaphore...\n", threadId);
+      printf("WRITER(%d): Releasing writer semaphore.\n", threadId);
       result = sem_post(&writer_sem);
       if (result != 0) {
         fprintf(stderr, "WRITER(%d): Error occured during unlocking the semaphore.\n", threadId);
@@ -57,14 +66,14 @@ writer(void* data) {
 
 // Reader thread function
 int
-redaer(void* data) {
+reader(void* data) {
   int i;
   int threadId = *(int*) data;
 
   for (i = 0; i<READER_TURNS; i++) {
-    printf("READER(%d): Starting turn %d\n", threadId, i+1);
+    printf("READER(%d): Starting turn %d/%d.\n", threadId, i+1, READER_TURNS);
     // wait(reader)
-    printf("READER(%d): Awaiting reader semaphore...\n", threadId);
+    printf("READER(%d): Awaiting reader semaphore.\n", threadId);
     if (sem_wait(&reader_sem) != 0) {
       fprintf(stderr, "READER(%d): Error occured during locking the reader semaphore.\n", threadId);
       exit(-1);
@@ -79,25 +88,25 @@ redaer(void* data) {
         fprintf(stderr, "READER(%d): Error occured during locking the writer semaphore.\n", threadId);
         exit(-1);
       } else {
-        printf("READER(%d): Acquired writer semaphore...\n", threadId);
+        printf("READER(%d): Acquired writer semaphore.\n", threadId);
       }
     }
     // release(reader)
-    printf("READER(%d): Releasing reader semaphore...\n", threadId);
+    printf("READER(%d): Releasing reader semaphore.\n", threadId);
     if(sem_post(&reader_sem) != 0) {
       fprintf(stderr, "READER(%d): Error occured during releasing the reader semaphore.\n", threadId);
       exit(-1);
     }
 
     // Read
-    printf("READER(%d): Started reading... %d/%d\n", threadId, i+1, READER_TURNS);
+    printf("READER(%d): Started reading. %d/%d\n", threadId, i+1, READER_TURNS);
     fflush(stdout);
     // Read, read, read
     usleep(random_time(2000));
     printf("READER(%d): Read %d/%d finished.\n", threadId, i+1, READER_TURNS);
 
     // wait(reader)
-    printf("READER(%d): Awaiting reader semaphore...\n", threadId);
+    printf("READER(%d): Awaiting reader semaphore.\n", threadId);
     if (sem_wait(&reader_sem) != 0) {
       fprintf(stderr, "READER(%d): Error occured during locking the reader semaphore.\n", threadId);
       exit(-1);
@@ -106,14 +115,14 @@ redaer(void* data) {
     readers_count--;
     if(readers_count == 0) {
       // release(writer)
-      printf("READER(%d): Releasing writer semaphore...\n", threadId);
+      printf("READER(%d): Releasing writer semaphore.\n", threadId);
       if(sem_post(&writer_sem) != 0) {
         fprintf(stderr, "READER(%d): Error occured during releasing the writer semaphore.\n", threadId);
         exit(-1);
       }
     }
     // release(reader)
-    printf("READER(%d): Releasing reader semaphore...\n", threadId);
+    printf("READER(%d): Releasing reader semaphore.\n", threadId);
     if(sem_post(&reader_sem) != 0) {
       fprintf(stderr, "READER(%d): Error occured during releasing the reader semaphore.\n", threadId);
       exit(-1);
@@ -166,7 +175,7 @@ main(int argc, char* argv[]) {
       rc = pthread_create(
                           &readerThreads[i], // thread identifier
                           NULL,              // thread attributes
-                          (void*) redaer,    // thread function
+                          (void*) reader,    // thread function
                           (void*) threadId);     // thread function argument
 
       if (rc != 0) {

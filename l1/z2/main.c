@@ -2,11 +2,28 @@
 #include<stdlib.h>
 #include<unistd.h>
 #include<pthread.h>
-#include<semaphore.h>
+/*
+  #2
 
-// If WRITERS_COUNT*WRITER_TURNS != READERS_COUNT*READER_TURNS program won't terminate.
+  N writer threads, M reader threads, 1 buffering thread.
+
+  Writer threads write to buffering thread(incrementing buff_wr).
+  Buffering thread moves received data to buffer for readers(buff_rd).
+  Readers read data from buff_rd(decrement it).
+
+  I use 3 conditionals:
+    - one for notifying writers about space in buffer
+    - one for notifying buffering thread about possible data to move
+    - one for notifying readers about new data
+
+  If WRITERS_COUNT*WRITER_TURNS != READERS_COUNT*READER_TURNS program won't terminate.
+
+  No error checking on functions using mutexes/conds.
+ */
+
 #define WRITERS_COUNT  4
 #define WRITER_TURNS  4
+
 #define READERS_COUNT 2
 #define READER_TURNS  8
 
@@ -23,7 +40,6 @@ pthread_mutex_t buff_reader_mut = PTHREAD_MUTEX_INITIALIZER;
 // Conditional used for informing shared buffer about new data.
 pthread_cond_t buff_update_cond = PTHREAD_COND_INITIALIZER;
 pthread_mutex_t buff_update_mut = PTHREAD_MUTEX_INITIALIZER;
-
 
 // buff_wr represents data queued for shared buffer.
 // can't be greater than BUFF_CAP
@@ -64,7 +80,7 @@ writer(void* data) {
     status();
 
     // There is something to write.
-    usleep(random_time(800));
+    usleep(random_time(1000));
     buff_wr++;
 
     printf("WRITER(%d): Write finished. Signaling new data. ", threadId);
@@ -75,7 +91,7 @@ writer(void* data) {
     // Inform shared buff about new data available.
     pthread_cond_signal(&buff_update_cond);
 
-    usleep(random_time(1000));
+    usleep(random_time(2000));
   }
 
   free(data);
@@ -109,7 +125,7 @@ shared_buff(void* data) {
     status();
 
     // There is soma data to be moved to rd buff.
-    usleep(random_time(800));
+    usleep(random_time(1000));
     while(buff_rd < BUFF_CAP && buff_wr > 0) {
       buff_wr--;
       buff_rd++;
@@ -125,6 +141,8 @@ shared_buff(void* data) {
 
     pthread_mutex_unlock(&buff_reader_mut);
     pthread_mutex_unlock(&buff_writer_mut);
+
+    usleep(random_time(2000));
   }
 
   return 0;

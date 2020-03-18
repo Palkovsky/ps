@@ -3,6 +3,15 @@
 #include<unistd.h>
 #include<pthread.h>
 
+/*
+  #4
+
+  N writers, M readers, 1 critic
+
+  I assume each thread must have exclusvie access to shared resource.
+  After performing write, writer notifies critic, which performs another write.
+ */
+
 #define WRITERS_COUNT  4
 #define WRITER_TURNS   4
 
@@ -16,12 +25,6 @@ pthread_mutex_t critic_mut  = PTHREAD_MUTEX_INITIALIZER;
 pthread_cond_t  critic_cond = PTHREAD_COND_INITIALIZER;
 // Writer sets sender_id before signaling it to critic.
 int sender_id = -1;
-
-// Prints buffer statuses.
-void
-status(void) {
-  printf("\n");
-}
 
 useconds_t
 random_time(long max) {
@@ -49,13 +52,12 @@ writer(void* data) {
     pthread_cond_signal(&critic_cond);
     pthread_mutex_unlock(&critic_mut);
 
-    printf("WRITER(%d): Critic notified. Releasing buffer lock.\n", threadId);
+    printf("WRITER(%d): Critic notified.\n", threadId);
 
-    // Don't unlock this mutex here.
+    // Don't unlock buffer_mut mutex here.
     // Notified critic will handle this.
-    // pthread_mutex_unlock(&buffer_mut);
 
-    usleep(random_time(1000));
+    usleep(random_time(2000));
   }
 
   free(data);
@@ -65,20 +67,25 @@ writer(void* data) {
 int
 critic(void* data) {
   for(;;) {
+    // Await for wakeup with sender_id >= 0
     pthread_mutex_lock(&critic_mut);
-    while(sender_id == -1) {
+    while(sender_id < 0) {
       pthread_cond_wait(&critic_cond, &critic_mut);
     }
+
     printf("CRITIC: Writer %d just performed write.\n", sender_id);
     sender_id = -1;
 
+    // Critic performs write.
     printf("CRITIC: Writing data.\n");
-    usleep(800);
-    printf("CRITIC: Write finished.\n");
+    usleep(random_time(1000));
+    printf("CRITIC: Write finished. Releasing lock.\n");
 
-    // Unlock buffer_mut, initally locked by writer.
+    // And critic performs buffer_mut unlock, not writier.
     pthread_mutex_unlock(&buffer_mut);
     pthread_mutex_unlock(&critic_mut);
+
+    usleep(random_time(2000));
 
   }
   return 0;

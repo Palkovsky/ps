@@ -2,13 +2,25 @@
 #include<stdlib.h>
 #include<unistd.h>
 #include<pthread.h>
-#include<semaphore.h>
 
-// Conditions required for program to terminate:
-// WRITERS_COUNT*WRITERS_TURNS = READERS_COUNT*READER_TURNS
-// (WRITERS_COUNT*WRITERS_TURNS or READERS_COUNT*READER_TURNS)%BUFF_CAP = 0
+/*
+  #6
+
+  N writers, M threads, 1 buffer of K size
+
+  Assumption: Only one thread can have exclusive access to the buffer.
+
+  Readers can start reading from buffer only when it's full.
+  Writers can start writing to buffer only when it's empty.
+  Writers and readers notify each other using conds.
+
+  Conditions required for program to terminate:
+    WRITERS_COUNT*WRITERS_TURNS = READERS_COUNT*READER_TURNS
+    (WRITERS_COUNT*WRITERS_TURNS or READERS_COUNT*READER_TURNS)%BUFF_CAP = 0
+*/
 #define WRITERS_COUNT  4
 #define WRITER_TURNS   4
+
 #define READERS_COUNT  2
 #define READER_TURNS   8
 
@@ -17,8 +29,13 @@
 pthread_mutex_t buff_mut = PTHREAD_MUTEX_INITIALIZER;
 pthread_cond_t reader_notify_cond = PTHREAD_COND_INITIALIZER;
 pthread_cond_t writer_notify_cond = PTHREAD_COND_INITIALIZER;
+
 int buff_sz = 0;
-int writing = 1;
+
+#define WRITING 0
+#define READING 1
+
+int buff_status = WRITING;
 
 useconds_t
 random_time(long max) {
@@ -41,34 +58,45 @@ writer(void* data) {
     printf("WRITER(%d): Starting turn %d/%d. ", threadId, i+1, WRITER_TURNS);
     status();
 
+    // Get notified when buff_status changes to WRITING
     pthread_mutex_lock(&buff_mut);
-    while(writing == 0) {
+    while(buff_status == READING) {
       printf("WRITER(%d): Write not possible. Awaiting. ", threadId);
       status();
       pthread_cond_wait(&writer_notify_cond, &buff_mut);
     }
 
-    printf("WRITER(%d): Write is now possible. Writing to buffer. ", threadId);
+    printf("WRITER(%d): Acquired lock on the buffer. Writing to buffer. ", threadId);
     status();
 
-    usleep(random_time(800));
+    // Perform write
+    usleep(random_time(1500));
     buff_sz++;
 
     printf("WRITER(%d): Update of buff: %d->%d. ", threadId, buff_sz-1, buff_sz);
     status();
 
+    // If reached full buffer capacity, change buff_status to READING
+    // and notify via reader_notify_cond
     if(buff_sz == BUFF_CAP) {
-      writing = 0;
+      buff_status = READING;
       pthread_cond_signal(&reader_notify_cond);
 
       printf("WRITER(%d): That was last write. Giving control to readers. ", threadId);
       status();
-    } else {
+    }
+    // Otherwise, notify other writer thread.
+    else {
       pthread_cond_signal(&writer_notify_cond);
     }
 
+    printf("WRITER(%d): Releasing buffer. ", threadId);
+    status();
+
+    // Unlock to allow other thread to access this buffer.
     pthread_mutex_unlock(&buff_mut);
-    usleep(random_time(1000));
+
+    usleep(random_time(3000));
   }
 
   free(data);
@@ -86,33 +114,42 @@ reader(void* data) {
     status();
 
     pthread_mutex_lock(&buff_mut);
-    while(writing == 1) {
+    while(buff_status == WRITING) {
       printf("READER(%d): Read not possible. Awaiting. ", threadId);
       status();
       pthread_cond_wait(&reader_notify_cond, &buff_mut);
     }
 
-    printf("READER(%d): Read is now possible. Reading. ", threadId);
+    printf("READER(%d): Acquired lock on the buffer. Reading. ", threadId);
     status();
 
-    usleep(random_time(800));
+    usleep(random_time(1500));
     buff_sz--;
 
     printf("READER(%d): Update of buff: %d->%d. ", threadId, buff_sz+1, buff_sz);
     status();
 
+    // If buffer empty, change state to WRITINT
+    // and notify via reader_notify_cond
     if(buff_sz == 0) {
-      writing = 1;
+      buff_status = WRITING;
       pthread_cond_signal(&writer_notify_cond);
 
       printf("READER(%d): That was last read. Giving control to writers. ", threadId);
       status();
-    } else {
+    }
+    // Otherwise, notify other reader threads.
+    else {
       pthread_cond_signal(&reader_notify_cond);
     }
 
+    printf("READER(%d): Releasing buffer. ", threadId);
+    status();
+
+    // Unlock to allow other thread to access this buffer.
     pthread_mutex_unlock(&buff_mut);
-    usleep(random_time(1000));
+
+    usleep(random_time(30000));
   }
 
   free(data);
