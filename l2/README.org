@@ -1,0 +1,70 @@
+#+TITLE: Programowanie systemowe - Wprowadzenie - Raport z ćwiczenia
+#+SUBTITLE: Dawid Macek
+#+LANGUAGE: pl
+#+OPTIONS: date:nil
+#+OPTIONS: toc:nil
+#+OPTIONS: num:nil
+#+OPTIONS: html-postamble:nil
+#+HTML_HEAD: <style>pre.src {background-color: #303030; color: #e5e5e5;}</style>
+
+* Zadanie 1 - LXR i dokumentacja
+
+* Zadanie 2  kompilacja jądra
+  Będę pracował na swojej wirtualnej maszynie i wersji jądra 5.5.
+
+** Setup
+   Tworzę katalog ~/usr/src/kernels~
+   #+begin_src bash
+   mkdir /usr/src/kernels
+   cd /usr/src/kernels
+   #+end_src
+
+   Pobieram jądro 5.5.
+   #+begin_src bash
+   wget https://cdn.kernel.org/pub/linux/kernel/v5.x/linux-5.5.13.tar.xz
+   tar -xf linux-5.5.13.tar.xz
+   #+end_src
+   
+   Tworzę linka symbolicznego, żeby nie musieć pamiętać nazwy.
+   #+begin_src bash
+   ln -s /usr/src/kernels/linux-5.5.13 /usr/src/kernels/linux
+   #+end_src
+
+   Kopiuję i rozpakowywuję plik ~.config~.
+   #+begin_src bash
+     cp /proc/config.gz .
+     gunzip config.gz
+     mv config .config
+   #+end_src
+
+** Co robi polecenie make oldconfig? Wykonaj je.
+   Wykonujemy:
+   #+begin_src bash
+   make help | grep oldconfig
+   #+end_src
+   #+begin_src 
+   oldconfig       - Update current config utilising a provided .config as base
+   olddefconfig    - Same as oldconfig but sets new symbols to their
+   #+end_src
+
+   ~make oldconfig~ updatuje ~.config~ wykorzystując stary plik jako bazę.
+   Skrypt ten może być przydatny przy migracji do innej wersji jądra.
+
+   Gdy w innej wersji pojawi się nowa opcja, to nowy ~.config~ będzie miał domyślną wartość.
+   Gdy w innej wersji nie będzie danej opcji, to zostanie ona zignorowana.
+   Gdy w innej wersji będzie dana opcja, to będzie oan taka jak w starym ~.config~.
+
+   Nie umieszczam outputu z konsoli, bo jest tak długi jak ilość opcji w ~.configu~.
+
+** Co robi polecenie make menuconfig? Wykonaj je.
+   Wykonujemy:
+   #+begin_src bash
+   make help | grep menuconfig
+   #+end_src
+   #+begin_src 
+   menuconfig      - Update current config utilising a menu based program
+   #+end_src
+
+   ~make menuconfig~ pozwala na skonfigurowanie jądra za pomocą interfejsu graficznego.
+
+
