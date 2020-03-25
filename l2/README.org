@@ -9,40 +9,38 @@
 
 * Zadanie 1 - LXR i dokumentacja
 
-* Zadanie 2  kompilacja jądra
-  Będę pracował na swojej wirtualnej maszynie i wersji jądra 5.5.
+* Zadanie 2 - kompilacja jądra
+  Będę pracował na swojej wirtualnej maszynie i jądrze 5.5.
 
 ** Setup
-   Tworzę katalog ~/usr/src/kernels~
+   #+CAPTION: Tworzę katalog ~/usr/src/kernels~
    #+begin_src bash
-   mkdir /usr/src/kernels
-   cd /usr/src/kernels
+   >> mkdir /usr/src/kernels
+   >> cd /usr/src/kernels
    #+end_src
 
-   Pobieram jądro 5.5.
+   #+CAPTION: Pobieram jądro 5.5.
    #+begin_src bash
-   wget https://cdn.kernel.org/pub/linux/kernel/v5.x/linux-5.5.13.tar.xz
-   tar -xf linux-5.5.13.tar.xz
+   >> wget https://cdn.kernel.org/pub/linux/kernel/v5.x/linux-5.5.13.tar.xz
+   >> tar -xf linux-5.5.13.tar.xz
    #+end_src
    
-   Tworzę linka symbolicznego, żeby nie musieć pamiętać nazwy.
+   #+CAPTION: Tworzę linka symbolicznego, żeby nie musieć pamiętać nazwy.
    #+begin_src bash
-   ln -s /usr/src/kernels/linux-5.5.13 /usr/src/kernels/linux
+   >> ln -s /usr/src/kernels/linux-5.5.13 /usr/src/kernels/linux
    #+end_src
 
-   Kopiuję i rozpakowywuję plik ~.config~.
+   #+CAPTION: Kopiuję i rozpakowywuję plik ~.config~.
    #+begin_src bash
-     cp /proc/config.gz .
-     gunzip config.gz
-     mv config .config
+     >> cp /proc/config.gz .
+     >> gunzip config.gz
+     >> mv config .config
    #+end_src
 
-** Co robi polecenie make oldconfig? Wykonaj je.
-   Wykonujemy:
+** Co robi polecenie ~make oldconfig~? Wykonaj je.
+   #+CAPTION: Opis ~make oldconfig~
    #+begin_src bash
-   make help | grep oldconfig
-   #+end_src
-   #+begin_src 
+   >> make help | grep oldconfig
    oldconfig       - Update current config utilising a provided .config as base
    olddefconfig    - Same as oldconfig but sets new symbols to their
    #+end_src
@@ -54,17 +52,98 @@
    Gdy w innej wersji nie będzie danej opcji, to zostanie ona zignorowana.
    Gdy w innej wersji będzie dana opcja, to będzie oan taka jak w starym ~.config~.
 
-   Nie umieszczam outputu z konsoli, bo jest tak długi jak ilość opcji w ~.configu~.
+   Nie umieszczam outputu z konsoli, bo jest tak długi jak ilość linii w pliku.
 
-** Co robi polecenie make menuconfig? Wykonaj je.
-   Wykonujemy:
+** Co robi polecenie ~make menuconfig~? Wykonaj je.
+   #+CAPTION: Opis ~make menuconfig~
    #+begin_src bash
-   make help | grep menuconfig
-   #+end_src
-   #+begin_src 
+   >> make help | grep menuconfig
    menuconfig      - Update current config utilising a menu based program
    #+end_src
 
    ~make menuconfig~ pozwala na skonfigurowanie jądra za pomocą interfejsu graficznego.
+   
+   #+CAPTION: Tak wygląda interfejs ~make menuconfig~
+   [[./imgs/2_1.png]]
 
+** Ustaw dowolną, ale charakterystyczną wersję lokalną (CONFIG​_LOCALVERSION albo General setup/Local version).
+   #+CAPTION: Ustawienie CONFIG​_LOCALVERSION za pomocą ~make menuconfig~
+   [[./imgs/2_2.png]]
+   
+   #+CAPTION: Po zapisaniu za pomocą ~make menuconfig~ zmiana zostaje wprowadzaona do pliku
+   #+begin_src bash
+   >> cat .config | grep LOCALVERSION
+   CONFIG_LOCALVERSION="KOPYTKO"
+   # CONFIG_LOCALVERSION_AUTO is not set
+   #+end_src
+** Zrób małą zmianę w konfiguracji (np. włącz obsługę któregoś systemu plików).
+   #+CAPTION: ~ADFS~ zostało włączone
+   [[./imgs/2_3.png]]
+** Co robi polecenie ~make all~?
+   #+begin_src 
+   all             - Build all targets marked with [*]
+   #+end_src
 
+   Polecenie powinno skompilować jądro i moduły.
+   W jądro wkompilowywane są opcje oznaczone [*].
+   Opcje oznaczone jako <M> kompilowane są jako moduły.
+
+** Co robią polecenia make ~modules_install~ i ~make install~?
+   #+CAPTION: Opis ~make modules_install~ i ~make install~
+   #+begin_src bash
+   >> make help | grep install
+   modules_install - Install all modules to INSTALL_MOD_PATH (default: /)
+   headers_install - Install sanitised kernel headers to INSTALL_HDR_PATH
+                     Build, install, and boot kernel before
+   install         - Install kernel using
+                     (your) ~/bin/installkernel or
+                     (distribution) /sbin/installkernel or
+                     install to $(INSTALL_PATH) and run lilo
+   #+end_src
+
+   ~make modules_install~ przeprowadzi instalację modułów jądra. 
+   Czyli w praktyce przeniesie je do jakiegoś konkretnego miejsca, z którego jądro będzie w stanie je ładować.
+
+   ~make install~ przeprowadzi instalację jądra.
+   Czyli umieści je w jakimś ustalonym miejscu, tak żeby bootloader je zobaczył.
+
+** Skompiluj jądro po zmianie i zmierz czas kompilacji (komenda time). Jakie informacje wyświetlają się podczas kompilacji?
+   #+begin_src bash
+   >>time (make all -j8 MARCH=x86-64)
+   8538,32s user 1265,58s system 773% cpu 21:07,60 total
+   #+end_src
+
+   Podczas kompilacji wyświetlają się nazwy powstałych plików obiektowych.
+   Pojawia się też oznaczenie [M] w zależności czy dana funkcjonalność będzie realizowana jako moduł.
+   Potem wszystko jest ze sobą linkowane i powstaje obraz jądra.
+
+   Kompilowało się 21 minut i 7 sekund.
+
+** Zainstaluj jądro w systemie.
+   #+CAPTION: Instalacja modułów, jądra i dla pewności aktualizacja GRUBa
+   #+begin_src bash
+   >> make modules_install
+   # ...
+   >> cp -v arch/x86_64/boot/bzImage /boot/vmlinuz-5.5.13-KOPYTKO
+   >> cp System.map /boot/System.map-5.5.13-KOPYTKO 
+   >> mkinitcpio -k 5.5.13-KOPYTKO -g /boot/initramfs-5.5.13-KOPYTKO.img
+   # ...
+   >> update-grub
+   Generating grub configuration file ...
+   Found theme: /usr/share/grub/themes/manjaro/theme.txt
+   Found linux image: /boot/vmlinuz-5.5.13-KOPYTKO
+   Found initrd image: /boot/intel-ucode.img /boot/amd-ucode.img /boot/initramfs-5.5.13-KOPYTKO.img
+   Found linux image: /boot/vmlinuz-5.5-x86_64
+   Found initrd image: /boot/intel-ucode.img /boot/amd-ucode.img /boot/initramfs-5.5-x86_64.img
+   Found initrd fallback image: /boot/initramfs-5.5-x86_64-fallback.img
+   Found memtest86+ image: /boot/memtest86+/memtest.bin
+   #+end_src
+
+   #+CAPTION: Nowe jądro jest widoczne w GRUBie
+   [[./imgs/2_4.png]]
+
+   #+CAPTION: Po zbootowaniu
+   [[./imgs/2_5.png]]
+
+* Zadanie 3 - kompilacja modułu
+* Zadanie 4 - uruchamianie jądra w QEMU
