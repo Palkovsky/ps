@@ -294,7 +294,7 @@ iptable_nat            16384  1
    #+end_src
 
 ** Kopiowanie potrzebnych plików na hosta
-   QEMU mam zainstalowanie na komputerze, więc kopiuję potrzebne pliki na hosta.
+   QEMU mam zainstalowanie na hoście, więc kopiuję tam potrzebne pliki.
 
    #+begin_src bash
    >> cp /tmp/rootfs.img /mnt/hgfs/qemu-linux/                    # rootfs
@@ -311,11 +311,121 @@ iptable_nat            16384  1
    #+end_src
 
 #+CAPTION: Okno QEMU
-[[./imgs/3_1.png]]
+[[./imgs/4_1.png]]
 
 Będąc w chroocie poczas tworzenia obrazu zapomniałem ustawić hasło.
 Przez to teraz nie mogę się zalogować.
 Ale widać, że obraz i wersja jądra się zgadzają.
 
 * Zadanie 5 — kompilacja jądra UML
+** Wykonaj komendę ~make ARCH=um defconfig~. Co ona robi?
+   #+begin_src bash
+   >> make help | grep defconfig
+   defconfig       - New config with default from ARCH supplied defconfig
+   #+end_src
 
+   Polecenie updatuje plik ~.config~ wartościami podanymi w pliku ~arch/um/x86_64_defconfig~.
+   
+** Skompiluj jądro komendą ~make ARCH=um~. Ile czasu zajęła kompilacja?
+   #+begin_src bash
+   >> time (make -j8 ARCH=um)
+   # ...
+   295,76s user 34,94s system 690% cpu 47,922 total
+   #+end_src
+
+   Zajęło 48 sekund. 
+   Wygląda na to, że jądro kompilowane pod UML nie potrzebuje zbyt dużo ficzerów.
+
+** Ustawienie hasła w obrazie ~rootfs~
+   Zapomniałem o tym poprzednim razem.
+
+   #+CAPTION: Ustawienia hasła dla obrazu
+   #+begin_src bash
+   >> mount /tmp/rootfs.img /mnt/rootfs
+   >> chroot /mnt/rootfs /bin/sh
+   / # passwd
+   Changing password for root
+   New password:
+   Bad password: too short
+   Retype password:
+   passwd: password for root changed by root
+   / # exit
+   >> umount /mnt/rootfs
+   #+end_src
+
+   Dodaję jeszcze wpis do ~/mnt/rootfs/etc/fstab~, bo inaczej obraz nie będzie montowany:
+   #+CAPTION: Nowy wpis w /mnt/rootfs/etc/fstab
+   #+begin_src 
+   /dev/ubd0 / ext4 defaults 0 0
+   #+end_src
+
+** Uruchamianie
+   #+CPATION: Uruchamianie jądra skompilowanego pod UM
+   #+begin_src bash
+   >> ./vmlinux ubd0=/tmp/rootfs.img mem=128M init=/bin/sh rw
+   #+end_src
+
+   #+CAPTION: Po uruchomieniu
+   [[./imgs/5_1.png]]
+
+   Wygląda na to, że ~make ARCH=um defconfig~ ucięło dopiskę ~-KOPYTKO~.
+
+** Zamontuj hostfs
+   #+begin_src bash
+   / # mkdir host
+   / # mount none /host -t hostfs
+   #+end_src
+
+   Pod ~/host~ mamy teraz dostęp do systemu plików hosta.
+   Możemy dodawać/usuwać/edytować pliki.
+
+** Jakie procesy są widoczne w gościu i po stronie hosta?
+    #+CAPTION: Host
+    #+begin_src bash
+>> ps -aux | grep vm
+root        215  0.0  0.0      0     0 ?        I<   18:54   0:00 [nvme-wq]
+root        216  0.0  0.0      0     0 ?        I<   18:54   0:00 [nvme-reset-wq]
+root        217  0.0  0.0      0     0 ?        I<   18:54   0:00 [nvme-delete-wq]
+root        354  0.0  0.0  78064  1240 ?        Ss   18:54   0:00 /usr/bin/lvmetad -f
+root        642  0.0  0.0      0     0 ?        S    18:54   0:00 [irq/16-vmwgfx]
+root        652  0.0  0.0 163524   576 ?        Ssl  18:54   0:00 vmhgfs-fuse .host:F/ /mnt/hgfs -o rw,allow_other,uid=1000,dev,suid
+root        669  0.0  0.0 161272  7328 ?        Ssl  18:54   0:00 /usr/bin/vmtoolsd
+andrzej   21397  0.0  0.1 133656 12144 pts/0    S+   19:11   0:00 ./vmlinux ubd0=/tmp/rootfs.img mem=128M init=/bin/sh rw
+andrzej   21402  0.0  0.1 133656 12144 pts/0    S+   19:11   0:00 ./vmlinux ubd0=/tmp/rootfs.img mem=128M init=/bin/sh rw
+andrzej   21403  0.0  0.1 133656 12144 pts/0    S+   19:11   0:00 ./vmlinux ubd0=/tmp/rootfs.img mem=128M init=/bin/sh rw
+andrzej   21404  0.0  0.0   3400  1352 pts/0    t+   19:11   0:00 ./vmlinux ubd0=/tmp/rootfs.img mem=128M init=/bin/sh rw
+andrzej   21496  0.0  0.0   6304  2292 pts/2    S+   19:16   0:00 grep vm    
+    #+end_src
+
+    Widać, że pojawiły się 4 procesy. Nie jestem pewien z czego to wynika. 
+    Być może jeden na każdy fizczny rdzeń procesora.
+
+    #+CAPTION: Gość
+    #+begin_src bash
+# Najpierw trzeba podmontować procfs
+/ # mount -t proc proc proc/
+/ # ps aux
+PID   USER     TIME  COMMAND
+   1 root      0:00 /bin/sh
+   2 root      0:00 [kthreadd]
+   3 root      0:00 [kworker/0:0-eve]
+   4 root      0:00 [kworker/0:0H-kb]
+   5 root      0:00 [kworker/u2:0-ev]
+   6 root      0:00 [mm_percpu_wq]
+   7 root      0:00 [ksoftirqd/0]
+   8 root      0:00 [kdevtmpfs]
+   9 root      0:00 [netns]
+  10 root      0:00 [oom_reaper]
+  11 root      0:00 [writeback]
+  12 root      0:00 [kworker/u2:1]
+  15 root      0:00 [kblockd]
+  16 root      0:00 [blkcg_punt_bio]
+  17 root      0:00 [kworker/0:1-eve]
+  18 root      0:00 [kswapd0]
+  19 root      0:00 [kworker/0:1H-kb]
+  21 root      0:00 [jbd2/ubda-8]
+  22 root      0:00 [ext4-rsv-conver]
+  36 root      0:00 ps aux
+    #+end_src
+
+    Gość nie widzi procesów hosta.
