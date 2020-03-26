@@ -8,7 +8,172 @@
 #+HTML_HEAD: <style>pre.src {background-color: #303030; color: #e5e5e5;}</style>
 
 * Zadanie 1 - LXR i dokumentacja
+** Znajdź definicję struktury ~file_operations~
+   #+CAPTION: Znalezione za pomocą LXR
+   #+begin_src c
+struct file_operations {
+  struct module *owner;
+  loff_t (*llseek) (struct file *, loff_t, int);
+  ssize_t (*read) (struct file *, char __user *, size_t, loff_t *);
+  ssize_t (*write) (struct file *, const char __user *, size_t, loff_t *);
+  ssize_t (*read_iter) (struct kiocb *, struct iov_iter *);
+  ssize_t (*write_iter) (struct kiocb *, struct iov_iter *);
+  int (*iterate) (struct file *, struct dir_context *);
+  unsigned int (*poll) (struct file *, struct poll_table_struct *);
+  long (*unlocked_ioctl) (struct file *, unsigned int, unsigned long);
+  long (*compat_ioctl) (struct file *, unsigned int, unsigned long);
+  int (*mmap) (struct file *, struct vm_area_struct *);
+  int (*mremap)(struct file *, struct vm_area_struct *);
+  int (*open) (struct inode *, struct file *);
+  int (*flush) (struct file *, fl_owner_t id);
+  int (*release) (struct inode *, struct file *);
+  int (*fsync) (struct file *, loff_t, loff_t, int datasync);
+  int (*aio_fsync) (struct kiocb *, int datasync);
+  int (*fasync) (int, struct file *, int);
+  int (*lock) (struct file *, int, struct file_lock *);
+  ssize_t (*sendpage) (struct file *, struct page *, int, size_t, loff_t *, int);
+  unsigned long (*get_unmapped_area)(struct file *, unsigned long, unsigned long, unsigned long, unsigned long);
+  int (*check_flags)(int);
+  int (*flock) (struct file *, int, struct file_lock *);
+  ssize_t (*splice_write)(struct pipe_inode_info *, struct file *, loff_t *, size_t, unsigned int);
+  ssize_t (*splice_read)(struct file *, loff_t *, struct pipe_inode_info *, size_t, unsigned int);
+  int (*setlease)(struct file *, long, struct file_lock **, void **);
+  long (*fallocate)(struct file *file, int mode, loff_t offset,
+                    loff_t len);
+  void (*show_fdinfo)(struct seq_file *m, struct file *f);
+#ifndef CONFIG_MMU
+  unsigned (*mmap_capabilities)(struct file *);
+#endif
+};   
+   #+end_src
+** Spróbuj odnaleźć użycie tej struktury w systemie plików ~hostfs~
+   W LXR wyszukuję ~hostfs~ i sprawdzam pliki ~hostfs.h~, ~hostfs_user.c~ i ~hostfs_kern.c~.
+   Użycia struktury ~file_operations~ szukam za pomocą szukaczki tekstu wbudowanej w przeglądarke.
 
+   #+CAPTION: Użycie w ~hostfs_kern.c~
+   #+begin_src c
+static const struct file_operations hostfs_file_fops = {
+        .llseek         = generic_file_llseek,
+        .splice_read    = generic_file_splice_read,
+        .read_iter      = generic_file_read_iter,
+        .write_iter     = generic_file_write_iter,
+        .mmap           = generic_file_mmap,
+        .open           = hostfs_open,
+        .release        = hostfs_file_release,
+        .fsync          = hostfs_fsync,
+};
+
+static const struct file_operations hostfs_dir_fops = {
+        .llseek         = generic_file_llseek,
+        .iterate        = hostfs_readdir,
+        .read           = generic_read_dir,
+        .open           = hostfs_open,
+        .fsync          = hostfs_fsync,
+};   
+   #+end_src
+
+   #+CAPTION: Użycie w ~hostfs_user.c~
+   #+begin_src c
+   BRAK
+   #+end_src
+
+   #+CAPTION: Użycie w ~hostfs.h~
+   #+begin_src c
+   BRAK
+   #+end_src
+** Czy potrafisz zinterpretować zastosowanie poszczególnych pól?
+   Struktura ~file_operations~ składa się prawie w całości ze wskaźników na funkcje.
+   Wszystkie z tych funkcji są związane z systemem plików.
+
+   Wygląda na to, że struktura ~file_operations~ służy do osiągnięcia polimorfizmu w C.
+   Sterowniki różnych systemów plików dostarczją implementacji funkcji.
+   Dzięki temu pozostały kod nie musi znać szczegółów danego sytemu plików aby na nim operować.
+** Zlokalizuj w dokumentacji (katalog Documentation lub wyszukiwarka) informacje o tym, jak przechodzić po strukturze katalogów w jądrze.
+   Nie mogę tego znaleźć.
+   Jedyny tutorial jaki znalazłem to ~Documentation/HOWTO~, ale nie ma tam nic.
+
+** Zlokalizuj plik ~namei.h~ a w nim funkcje ~kern_path~ i ~user_path~. Czym się one różnią i kiedy mają zastosowanie?
+   #+CAPTION: ~namei.h~
+   #+begin_src c
+// ...
+extern int user_path_at_empty(int, const char __user *, unsigned, struct path *, int *empty);
+static inline int user_path_at(int dfd, const char __user *name, unsigned flags, struct path *path)
+{
+  return user_path_at_empty(dfd, name, flags, path, NULL);
+}
+extern int kern_path(const char *, unsigned, struct path *);
+// ...
+   #+end_src
+
+   Funkcje znajdujące się w ~namei.h~ służą do konwersji ścieżki podanej jako string do struktury ~path~.
+   Strukutra ~path~ zawiera wskaźnik do struktury ~dentry~, która w ~VFS~ reprezentuje plik(katalog to plik ze wskaźnikami na dzieci).
+   Struktura zawiera też wskaźnik na i-węzeł.
+
+   ~kern_path~ i ~user_path_*~ różnią się tym, że ~user_path~ przyjmuje jako argument nazwę użytkownika.
+   Najprawdopodobniej będzie ona służyła do sprawdzenia uprawnień do plików.
+   Potwierdza to jej użycie w miejscach takich jak ~fs/open.c~ lub ~fs/stat.c~, czyli tam gdzie implemntowane są wywołania systmowe, które muszą być bezpieczne.
+
+   ~kern_path~ jest używane w plikach o nazwach, których w ogólę nie kojarzę.
+   Na tej podstawie wnioskuję, że jest ona wykorzystywane na potrzeby wewnętrzne jądra.
+
+   ~user_path_*~ ma jeszcze dodatkowy argument, który pozwala na przekazanie deskryptora katalogu względem którego będzie resolvowana ścieżka.
+** Znajdź definicję struktury ~dentry~.
+   #+CPATION: ~linux/dcache.h~
+   #+begin_src c
+struct dentry {
+  /* RCU lookup touched fields */
+  unsigned int d_flags;           /* protected by d_lock */
+  seqcount_t d_seq;               /* per dentry seqlock */
+  struct hlist_bl_node d_hash;    /* lookup hash list */
+  struct dentry *d_parent;        /* parent directory */
+  struct qstr d_name;
+  struct inode *d_inode;          /* Where the name belongs to - NULL is negative */
+  unsigned char d_iname[DNAME_INLINE_LEN];        /* small names */
+
+  /* Ref lookup also touches following */
+  struct lockref d_lockref;       /* per-dentry lock and refcount */
+  const struct dentry_operations *d_op;
+  struct super_block *d_sb;       /* The root of the dentry tree */
+  unsigned long d_time;           /* used by d_revalidate */
+  void *d_fsdata;                 /* fs-specific data */
+
+  union {
+          struct list_head d_lru;         /* LRU list */
+          wait_queue_head_t *d_wait;      /* in-lookup ones only */
+  };
+  struct list_head d_child;       /* child of parent list */
+  struct list_head d_subdirs;     /* our children */
+  /* d_alias and d_rcu can share memory */
+  union {
+          struct hlist_node d_alias;      /* inode alias list */
+          struct hlist_bl_node d_in_lookup_hash;  /* only for in-lookup ones */
+          struct rcu_head d_rcu;
+  } d_u;
+} __randomize_layout;   
+   #+end_src
+** Znajdź funkcję ~dget~. Co ona robi i po co?
+   #+CAPTION: linux/dcache.h
+   #+begin_src c
+/**
+  *      dget, dget_dlock -      get a reference to a dentry
+  *      @dentry: dentry to get a reference to
+  *
+  *      Given a dentry or %NULL pointer increment the reference count
+  *      if appropriate and return the dentry. A dentry will not be 
+  *      destroyed when it has references.
+  */ 
+ static inline struct dentry *dget(struct dentry *dentry)
+ {
+         if (dentry)
+                 lockref_get(&dentry->d_lockref);
+         return dentry;
+ }   
+   #+end_src
+
+   ~dget()~ wywołuje ~lockref_get()~.
+   Gdy zajrzymy do implementacji ~lockref_get()~, to zobaczymy że licznik referencji zostaje atomowo zinkrementowany.
+   
+   Jądro śledzi referencje po to, aby wiedzieć kiedy można bezpiecznie pozbyć się struktury.
 * Zadanie 2 - kompilacja jądra
   Będę pracował na swojej wirtualnej maszynie i jądrze 5.5.
 
