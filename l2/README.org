@@ -146,4 +146,120 @@
    [[./imgs/2_5.png]]
 
 * Zadanie 3 - kompilacja modułu
+  Nie mam przykładowego modułu, dlatego posłużę się poniższym:
+  
+  #+CAPTION: ~hello.c~
+  #+begin_src c
+#include<linux/kernel.h>
+#include<linux/module.h>
+#include<linux/init.h>
+
+MODULE_LICENSE("GPL");
+MODULE_DESCRIPTION("A Simple Hello World module");
+
+static int __init hello_init(void)
+{
+  printk(KERN_INFO "Hello world!\n");
+  return 0;
+}
+
+static void __exit hello_cleanup(void)
+{
+  printk(KERN_INFO "Goodbye world.\n");
+}
+
+module_init(hello_init);
+module_exit(hello_cleanup);
+
+  #+end_src
+
+  #+CAPTION: ~Makefile~
+  #+begin_src Makefile
+obj-m += hello.o
+
+all:
+    make -C /lib/modules/$(shell uname -r)/build M=$(PWD) modules
+
+clean:
+    make -C /lib/modules/$(shell uname -r)/build M=$(PWD) clean  
+  #+end_src
+
+  #+CAPTION: Zbudowanie modułu
+  #+begin_src bash
+>> make
+make -C /lib/modules/5.5.13-KOPYTKO/build M=/tmp modules
+make[1]: Wejście do katalogu '/usr/src/kernels/linux-5.5.13'
+  CC [M]  /tmp/hello.o
+  Building modules, stage 2.
+  MODPOST 1 modules
+  CC [M]  /tmp/hello.mod.o
+  LD [M]  /tmp/hello.ko
+make[1]: Opuszczenie katalogu '/usr/src/kernels/linux-5.5.13'
+  #+end_src
+
+** Załaduj za pomocą ~insmod~
+   #+CAPTION: Ładowanie za pomocą ~insmod~
+   #+begin_src bash
+   >> sudo insmod hello.ko
+   #+end_src
+** Wylistuj za pomocą ~lsmod~
+   #+CAPTION: Listowanie za pomocą ~lsmod~
+   #+begin_src bash
+>>> sudo lsmod
+Module                  Size  Used by
+hello                  16384  0                       # Nasz moduł
+xt_conntrack           16384  1
+xt_MASQUERADE          20480  1
+nf_conntrack_netlink    57344  0
+nfnetlink              16384  2 nf_conntrack_netlink
+xfrm_user              45056  1
+xfrm_algo              16384  1 xfrm_user
+xt_addrtype            16384  2
+iptable_filter         16384  1
+iptable_nat            16384  1
+# ...
+   #+end_src
+
+** Obejrzyj komunikaty jądra za pomocą ~dmesg~
+   #+CAPTION: Wyświetlenie komunikatów po załadowaniu modułu.
+   #+begin_src bash
+>>> sudo insmod hello.ko
+>>> sudo dmesg | tail
+[ 2314.602080] audit: type=1104 audit(1585237700.183:211): pid=6479 uid=0 auid=1000 ses=3 msg='op=PAM:setcred grantors=pam_unix,pam_permit,pam_env acct="root" exe="/usr/bin/sudo" hostname=? addr=? terminal=/dev/pts/0 res=success'
+[ 2336.867110] audit: type=1101 audit(1585237722.447:212): pid=6511 uid=1000 auid=1000 ses=3 msg='op=PAM:accounting grantors=pam_unix,pam_permit,pam_time acct="andrzej" exe="/usr/bin/sudo" hostname=? addr=? terminal=/dev/pts/0 res=success'
+[ 2336.867197] audit: type=1110 audit(1585237722.447:213): pid=6511 uid=0 auid=1000 ses=3 msg='op=PAM:setcred grantors=pam_unix,pam_permit,pam_env acct="root" exe="/usr/bin/sudo" hostname=? addr=? terminal=/dev/pts/0 res=success'
+[ 2336.867991] audit: type=1105 audit(1585237722.447:214): pid=6511 uid=0 auid=1000 ses=3 msg='op=PAM:session_open grantors=pam_limits,pam_unix,pam_permit acct="root" exe="/usr/bin/sudo" hostname=? addr=? terminal=/dev/pts/0 res=success'
+[ 2336.869234] Hello world!
+[ 2336.869485] audit: type=1106 audit(1585237722.450:215): pid=6511 uid=0 auid=1000 ses=3 msg='op=PAM:session_close grantors=pam_limits,pam_unix,pam_permit acct="root" exe="/usr/bin/sudo" hostname=? addr=? terminal=/dev/pts/0 res=success'
+[ 2336.869528] audit: type=1104 audit(1585237722.450:216): pid=6511 uid=0 auid=1000 ses=3 msg='op=PAM:setcred grantors=pam_unix,pam_permit,pam_env acct="root" exe="/usr/bin/sudo" hostname=? addr=? terminal=/dev/pts/0 res=success'
+[ 2338.100884] audit: type=1101 audit(1585237723.680:217): pid=6521 uid=1000 auid=1000 ses=3 msg='op=PAM:accounting grantors=pam_unix,pam_permit,pam_time acct="andrzej" exe="/usr/bin/sudo" hostname=? addr=? terminal=/dev/pts/0 res=success'
+[ 2338.100971] audit: type=1110 audit(1585237723.680:218): pid=6521 uid=0 auid=1000 ses=3 msg='op=PAM:setcred grantors=pam_unix,pam_permit,pam_env acct="root" exe="/usr/bin/sudo" hostname=? addr=? terminal=/dev/pts/0 res=success'
+[ 2338.101796] audit: type=1105 audit(1585237723.683:219): pid=6521 uid=0 auid=1000 ses=3 msg='op=PAM:session_open grantors=pam_limits,pam_unix,pam_permit acct="root" exe="/usr/bin/sudo" hostname=? addr=? terminal=/dev/pts/0 res=success'
+   #+end_src
+
+** Usuń za pomocą ~rmmod~ i wyświetl komunikaty jądra.
+#+CAPTION: Wyświetlenie komunikatów po usunięciu modułu.
+   #+begin_src bash
+>>> sudo rmmod hello
+>>> sudo dmesg | tail
+[ 2338.108594] audit: type=1104 audit(1585237723.690:221): pid=6521 uid=0 auid=1000 ses=3 msg='op=PAM:setcred grantors=pam_unix,pam_permit,pam_env acct="root" exe="/usr/bin/sudo" hostname=? addr=? terminal=/dev/pts/0 res=success'
+[ 2496.807056] audit: type=1101 audit(1585237882.387:222): pid=6561 uid=1000 auid=1000 ses=3 msg='op=PAM:accounting grantors=pam_unix,pam_permit,pam_time acct="andrzej" exe="/usr/bin/sudo" hostname=? addr=? terminal=/dev/pts/0 res=success'
+[ 2496.807138] audit: type=1110 audit(1585237882.387:223): pid=6561 uid=0 auid=1000 ses=3 msg='op=PAM:setcred grantors=pam_unix,pam_permit,pam_env acct="root" exe="/usr/bin/sudo" hostname=? addr=? terminal=/dev/pts/0 res=success'
+[ 2496.807971] audit: type=1105 audit(1585237882.387:224): pid=6561 uid=0 auid=1000 ses=3 msg='op=PAM:session_open grantors=pam_limits,pam_unix,pam_permit acct="root" exe="/usr/bin/sudo" hostname=? addr=? terminal=/dev/pts/0 res=success'
+[ 2496.808780] Goodbye world.
+[ 2496.839289] audit: type=1106 audit(1585237882.420:225): pid=6561 uid=0 auid=1000 ses=3 msg='op=PAM:session_close grantors=pam_limits,pam_unix,pam_permit acct="root" exe="/usr/bin/sudo" hostname=? addr=? terminal=/dev/pts/0 res=success'
+[ 2496.839337] audit: type=1104 audit(1585237882.420:226): pid=6561 uid=0 auid=1000 ses=3 msg='op=PAM:setcred grantors=pam_unix,pam_permit,pam_env acct="root" exe="/usr/bin/sudo" hostname=? addr=? terminal=/dev/pts/0 res=success'
+[ 2498.034229] audit: type=1101 audit(1585237883.613:227): pid=6569 uid=1000 auid=1000 ses=3 msg='op=PAM:accounting grantors=pam_unix,pam_permit,pam_time acct="andrzej" exe="/usr/bin/sudo" hostname=? addr=? terminal=/dev/pts/0 res=success'
+[ 2498.034315] audit: type=1110 audit(1585237883.613:228): pid=6569 uid=0 auid=1000 ses=3 msg='op=PAM:setcred grantors=pam_unix,pam_permit,pam_env acct="root" exe="/usr/bin/sudo" hostname=? addr=? terminal=/dev/pts/0 res=success'
+[ 2498.035112] audit: type=1105 audit(1585237883.617:229): pid=6569 uid=0 auid=1000 ses=3 msg='op=PAM:session_open grantors=pam_limits,pam_unix,pam_permit acct="root" exe="/usr/bin/sudo" hostname=? addr=? terminal=/dev/pts/0 res=success'   
+   #+end_src
+
+** Zapoznaj się z dokładniej z komendą ~dmseg~
+   Kilka przydatnych opcji.
+   #+begin_example
+   -w - opcja pozwala na obserwowanie komunikatów na żyw
+   -H, --human - opcja dodaje kolorowanie
+   --level=... - pozwala na filtrowanie wiadomości np. tylko błędy
+   #+end_example
+
 * Zadanie 4 - uruchamianie jądra w QEMU
