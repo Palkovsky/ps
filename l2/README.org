@@ -24,7 +24,7 @@
    >> wget https://cdn.kernel.org/pub/linux/kernel/v5.x/linux-5.5.13.tar.xz
    >> tar -xf linux-5.5.13.tar.xz
    #+end_src
-   
+
    #+CAPTION: Tworzę linka symbolicznego, żeby nie musieć pamiętać nazwy.
    #+begin_src bash
    >> ln -s /usr/src/kernels/linux-5.5.13 /usr/src/kernels/linux
@@ -62,14 +62,14 @@
    #+end_src
 
    ~make menuconfig~ pozwala na skonfigurowanie jądra za pomocą interfejsu graficznego.
-   
+
    #+CAPTION: Tak wygląda interfejs ~make menuconfig~
    [[./imgs/2_1.png]]
 
 ** Ustaw dowolną, ale charakterystyczną wersję lokalną (CONFIG​_LOCALVERSION albo General setup/Local version).
    #+CAPTION: Ustawienie CONFIG​_LOCALVERSION za pomocą ~make menuconfig~
    [[./imgs/2_2.png]]
-   
+
    #+CAPTION: Po zapisaniu za pomocą ~make menuconfig~ zmiana zostaje wprowadzaona do pliku
    #+begin_src bash
    >> cat .config | grep LOCALVERSION
@@ -80,7 +80,7 @@
    #+CAPTION: ~ADFS~ zostało włączone
    [[./imgs/2_3.png]]
 ** Co robi polecenie ~make all~?
-   #+begin_src 
+   #+begin_src
    all             - Build all targets marked with [*]
    #+end_src
 
@@ -101,7 +101,7 @@
                      install to $(INSTALL_PATH) and run lilo
    #+end_src
 
-   ~make modules_install~ przeprowadzi instalację modułów jądra. 
+   ~make modules_install~ przeprowadzi instalację modułów jądra.
    Czyli w praktyce przeniesie je do jakiegoś konkretnego miejsca, z którego jądro będzie w stanie je ładować.
 
    ~make install~ przeprowadzi instalację jądra.
@@ -125,7 +125,7 @@
    >> make modules_install
    # ...
    >> cp -v arch/x86_64/boot/bzImage /boot/vmlinuz-5.5.13-KOPYTKO
-   >> cp System.map /boot/System.map-5.5.13-KOPYTKO 
+   >> cp System.map /boot/System.map-5.5.13-KOPYTKO
    >> mkinitcpio -k 5.5.13-KOPYTKO -g /boot/initramfs-5.5.13-KOPYTKO.img
    # ...
    >> update-grub
@@ -147,7 +147,7 @@
 
 * Zadanie 3 - kompilacja modułu
   Nie mam przykładowego modułu, dlatego posłużę się poniższym:
-  
+
   #+CAPTION: ~hello.c~
   #+begin_src c
 #include<linux/kernel.h>
@@ -181,7 +181,7 @@ all:
     make -C /lib/modules/$(shell uname -r)/build M=$(PWD) modules
 
 clean:
-    make -C /lib/modules/$(shell uname -r)/build M=$(PWD) clean  
+    make -C /lib/modules/$(shell uname -r)/build M=$(PWD) clean
   #+end_src
 
   #+CAPTION: Zbudowanie modułu
@@ -251,7 +251,7 @@ iptable_nat            16384  1
 [ 2496.839337] audit: type=1104 audit(1585237882.420:226): pid=6561 uid=0 auid=1000 ses=3 msg='op=PAM:setcred grantors=pam_unix,pam_permit,pam_env acct="root" exe="/usr/bin/sudo" hostname=? addr=? terminal=/dev/pts/0 res=success'
 [ 2498.034229] audit: type=1101 audit(1585237883.613:227): pid=6569 uid=1000 auid=1000 ses=3 msg='op=PAM:accounting grantors=pam_unix,pam_permit,pam_time acct="andrzej" exe="/usr/bin/sudo" hostname=? addr=? terminal=/dev/pts/0 res=success'
 [ 2498.034315] audit: type=1110 audit(1585237883.613:228): pid=6569 uid=0 auid=1000 ses=3 msg='op=PAM:setcred grantors=pam_unix,pam_permit,pam_env acct="root" exe="/usr/bin/sudo" hostname=? addr=? terminal=/dev/pts/0 res=success'
-[ 2498.035112] audit: type=1105 audit(1585237883.617:229): pid=6569 uid=0 auid=1000 ses=3 msg='op=PAM:session_open grantors=pam_limits,pam_unix,pam_permit acct="root" exe="/usr/bin/sudo" hostname=? addr=? terminal=/dev/pts/0 res=success'   
+[ 2498.035112] audit: type=1105 audit(1585237883.617:229): pid=6569 uid=0 auid=1000 ses=3 msg='op=PAM:session_open grantors=pam_limits,pam_unix,pam_permit acct="root" exe="/usr/bin/sudo" hostname=? addr=? terminal=/dev/pts/0 res=success'
    #+end_src
 
 ** Zapoznaj się z dokładniej z komendą ~dmseg~
@@ -263,3 +263,59 @@ iptable_nat            16384  1
    #+end_example
 
 * Zadanie 4 - uruchamianie jądra w QEMU
+  Jako rootfs będę używał obraz pobrany z https://alpinelinux.org/downloads/ z kategorii ~MINI ROOT FILESYSTEM~.
+
+** Rootfs
+   #+CAPTION: Pobranie
+   #+begin_src bash
+   >> cd /tmp
+   >> wget -O alpine.tar.gz http://dl-cdn.alpinelinux.org/alpine/v3.11/releases/x86_64/alpine-minirootfs-3.11.5-x86_64.tar.gz
+   >> mkdir qemu && cd rootfs
+   >> tar xf ../alpine.tar.gz
+   # można się schrootować
+   >> sudo chroot . /bin/sh
+   / #
+   #+end_src
+
+   Taki rootfs powinien wystarczyć na sprawdzenie czy jądro się bootuje.
+
+   #+CAPTION: Tworzenie obrazu
+   #+begin_src bash
+   >> dd if=/dev/zero of=rootfs.img bs=1M count=1024
+   >> mkfs.ext4 -F -L linuxroot rootfs.img
+   >> sudo mkdir /mnt/rootfs
+   >> sudo mount -o loop rootfs.img /mnt/rootfs
+   >> df -h | grep rootfs
+   /dev/loop0      976M  2,6M  907M   1% /mnt/rootfs
+   >> sudo cp -r /tmp/rootfs/* /mnt/rootfs
+   >> df -h | grep rootfs                             # niepotrzebnie 1GB
+   /dev/loop0      976M  8,4M  901M   1% /mnt/rootfs
+   >> sudo umount /mnt/rootfs
+   #+end_src
+
+** Kopiowanie potrzebnych plików na hosta
+   QEMU mam zainstalowanie na komputerze, więc kopiuję potrzebne pliki na hosta.
+
+   #+begin_src bash
+   >> cp /tmp/rootfs.img /mnt/hgfs/qemu-linux/                    # rootfs
+   >> cp /boot/vmlinuz-5.5.13-KOPYTKO /mnt/hgfs/qemu-linux/       # jądro
+   >> cp /boot/initramfs-5.5.13-KOPYTKO.img /mnt/hgfs/qemu-linux/ # initrd
+   #+end_src
+
+** Uruchamianie
+   Używam następującej komendy do uruchomienia.
+
+   #+CAPTION: Uruchamianie QEMU na hoście
+   #+begin_src bat
+    qemu-system-x86_64.exe -m 256 -kernel .\vmlinuz-5.5.13-KOPYTKO -hda .\rootfs.img -initrd .\initramfs-5.5.13-KOPYTKO.img -append 'root=/dev/sda'
+   #+end_src
+
+#+CAPTION: Okno QEMU
+[[./imgs/3_1.png]]
+
+Będąc w chroocie poczas tworzenia obrazu zapomniałem ustawić hasło.
+Przez to teraz nie mogę się zalogować.
+Ale widać, że obraz i wersja jądra się zgadzają.
+
+* Zadanie 5 — kompilacja jądra UML
+
