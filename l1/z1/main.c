@@ -7,7 +7,6 @@
 
 /*
   #1
-  
   Multiple readers. One writer.
 
   Multiple readers can access buffer at the same time.

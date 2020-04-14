@@ -81,7 +81,7 @@ critic(void* data) {
     usleep(random_time(1000));
     printf("CRITIC: Write finished. Releasing lock.\n");
 
-    // And critic performs buffer_mut unlock, not writier.
+    // Critic performs buffer_mut unlock, not writier.
     pthread_mutex_unlock(&buffer_mut);
     pthread_mutex_unlock(&critic_mut);
 
