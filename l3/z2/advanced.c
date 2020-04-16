@@ -215,6 +215,7 @@ static ssize_t mountderef_write(struct file *filep, const char *buff, size_t cou
   ssize_t read;
   ssize_t left;
   struct path path;
+  struct path mount_path;
 
   read = *offp;
   left = count-read;
@@ -238,17 +239,14 @@ static ssize_t mountderef_write(struct file *filep, const char *buff, size_t cou
     if(result != 0)
       return -EINVAL;
 
-    // Mountpoint dereference doesn't really work.
-    mountderef_ptr = dentry_path_raw(path.mnt->mnt_root,
-                                     mountderef_buff, PATH_MAX);
+    mount_path.mnt = path.mnt;
+    mount_path.dentry = path.mnt->mnt_root;
+    mountderef_ptr = d_path(&mount_path, mountderef_buff, PATH_MAX);
+
     if(mountderef_ptr == NULL)
       return -EINVAL;
 
-    MODULE_LOG("mountderef_write: mnt %s | %s | %s | %s\n",
-               path.mnt->mnt_sb->s_id,
-               path.mnt->mnt_root->d_name.name,
-               path.dentry->d_name.name,
-               mountderef_ptr);
+    MODULE_LOG("mountderef_write: mnt '%s'\n", mountderef_ptr);
   }
 
   return left;
