@@ -15,7 +15,7 @@ MODULE_LICENSE("GPL");
 MODULE_AUTHOR("Dawid Macek");
 MODULE_DESCRIPTION("Circular buffer");
 
-#define CIRCULAR_LOG(fmt, ...) {\
+#define MODULE_LOG(fmt, ...) {\
   printk("===== /dev/%s =====", THIS_MODULE->name);  \
   printk(fmt, ##__VA_ARGS__);\
 }
@@ -80,7 +80,7 @@ static ssize_t circular_read(struct file *filep, char *buff, size_t count, loff_
 
   result = copy_to_user(buff, circular_buff, CIRCULAR_SZ);
   if(result != 0) {
-    CIRCULAR_LOG("circular_read: error copying to user-space\n");
+    MODULE_LOG("circular_read: error copying to user-space\n");
     return -EFAULT;
   }
 
@@ -101,7 +101,7 @@ static ssize_t circular_write(struct file *filep, const char *buff, size_t count
 
     result = copy_from_user(kbuff, buff+bytes_read, kbuffsz);
     if(result != 0) {
-      CIRCULAR_LOG("circular_write: error copying from user-space\n");
+      MODULE_LOG("circular_write: error copying from user-space\n");
       return -EFAULT;
     }
 
@@ -122,25 +122,25 @@ static ssize_t circular_proc_write(struct file *filep, const char *buff, size_t 
   unsigned long parsed;
   char kbuff[32];
 
-  CIRCULAR_LOG("circular_proc_write: off: %lld, count: %ld...\n", *offp, count);
+  MODULE_LOG("circular_proc_write: off: %lld, count: %ld...\n", *offp, count);
   if(*offp > 0 || count > 32) {
     return 0;
   }
 
   result = copy_from_user(kbuff, buff, count);
   if(result != 0) {
-    CIRCULAR_LOG("circular_proc_write: error copying from user-space\n");
+    MODULE_LOG("circular_proc_write: error copying from user-space\n");
     return -EFAULT;
   }
 
   result = kstrtoul(kbuff, 10, &parsed);
   if(result != 0) {
-    CIRCULAR_LOG("circular_proc_write: parsing error\n");
+    MODULE_LOG("circular_proc_write: parsing error\n");
     return result;
   }
 
   if(parsed == 0) {
-    CIRCULAR_LOG("circular_proc_write: 0 is not allowed\n");
+    MODULE_LOG("circular_proc_write: 0 is not allowed\n");
     return -EINVAL;
   }
 
@@ -149,7 +149,7 @@ static ssize_t circular_proc_write(struct file *filep, const char *buff, size_t 
 
   result = circular_realloc();
   if(result != 0) {
-    CIRCULAR_LOG("circular_proc_write: unable to realloc buffer\n");
+    MODULE_LOG("circular_proc_write: unable to realloc buffer\n");
     return result;
   }
 
@@ -164,7 +164,7 @@ static ssize_t circular_proc_read(struct file *filep, char *buff, size_t count, 
 
   result = sprintf(kbuff, "%lld", CIRCULAR_SZ);
   if(result < 0) {
-    CIRCULAR_LOG("circular_proc_read: unable to parse BUFF_SIZE\n");
+    MODULE_LOG("circular_proc_read: unable to parse BUFF_SIZE\n");
     return -EFAULT;
   }
 
@@ -175,12 +175,11 @@ static ssize_t circular_proc_read(struct file *filep, char *buff, size_t count, 
 
   result = copy_to_user(buff, kbuff, kstrsz);
   if(result != 0) {
-    CIRCULAR_LOG("circular_proc_read: error copying to user-space\n");
+    MODULE_LOG("circular_proc_read: error copying to user-space\n");
     return -EFAULT;
   }
 
   *offp = kstrsz;
-
   return kstrsz;
 }
 
@@ -191,24 +190,24 @@ static int __init circular_init(void)
 
   result = misc_register(&circular_device);
   if(result != 0) {
-    CIRCULAR_LOG("misc_register() failed with %d\n", result);
+    MODULE_LOG("misc_register() failed with %d\n", result);
     return result;
   }
 
   proc_entry = proc_create(THIS_MODULE->name, 0777, NULL, &circular_proc_ops);
   if(!proc_entry) {
-    CIRCULAR_LOG("proc_entry() has failed\n");
+    MODULE_LOG("proc_entry() has failed\n");
     result = 1;
     goto out_deregister;
   }
 
   result = circular_realloc();
   if(result != 0) {
-    CIRCULAR_LOG("circular_realloc() failed\n");
+    MODULE_LOG("circular_realloc() failed\n");
     goto out_remove_proc;
   }
 
-  CIRCULAR_LOG("load ok\n");
+  MODULE_LOG("load ok\n");
   return result;
 
  out_remove_proc:
@@ -223,7 +222,7 @@ static void __exit circular_exit(void)
   misc_deregister(&circular_device);
   remove_proc_entry(THIS_MODULE->name, NULL);
   circular_realease();
-  CIRCULAR_LOG("unload ok\n");
+  MODULE_LOG("unload ok\n");
 }
 
 module_init(circular_init);
