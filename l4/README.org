@@ -1,0 +1,14 @@
+#+TITLE: Programowanie systemowe - Debugowanie - Raport z ćwiczenia
+#+SUBTITLE: Dawid Macek
+#+LANGUAGE: pl
+#+OPTIONS: date:nil
+#+OPTIONS: toc:nil
+#+OPTIONS: num:nil
+#+OPTIONS: html-postamble:nil
+#+HTML_HEAD: <style>pre.src {background-color: #303030; color: #e5e5e5;}</style>
+
+* Zadanie 1 - Moduł 1
+* Zadanie 1 - Moduł 2
+* Zadanie 1 - Moduł 3
+* Zadanie 1 - Moduł 4
+* Zadanie 2 - GDB
