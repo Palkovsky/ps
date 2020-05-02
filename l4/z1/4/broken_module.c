@@ -12,7 +12,7 @@ int fill_buffer(char* buf) {
 /* Counts number of digits in provided string */
 int count_numbers(char* str) {
    int numbers = 0;
-   char* ptr = 0; 
+   char* ptr = str;
 
    while (*ptr != 0) {
      ptr++;
@@ -51,6 +51,7 @@ void broken_exit(void) {
 
     printk(KERN_WARNING "The BROKEN module has been removed\n");
 }
+
 
 int broken_open(struct inode *inode, struct file *filp) {
     return 0;
@@ -99,7 +100,7 @@ ssize_t broken_write(struct file *filp, const char *user_buf, size_t count, loff
    int err;
 
     // Initialize the memory
-    kmalloc(mybuf_size, GFP_KERNEL);
+    mybuf = kmalloc(mybuf_size+1, GFP_KERNEL);
 
     // Take the max(mybuf_size, count)
     if (real_count > mybuf_size)
@@ -111,14 +112,13 @@ ssize_t broken_write(struct file *filp, const char *user_buf, size_t count, loff
 
     if (!err && real_count > 0) {
         // Count number of digits in buffer
-	numbers_count = count_numbers(mybuf);
+      numbers_count = count_numbers(mybuf);
     } else {
-	printk(KERN_WARNING "BROKEN: error occured in write function");
+      printk(KERN_WARNING "BROKEN: error occured in write function");
     }
 
     // Free the memory
-    if (mybuf != NULL)
-      kfree(mybuf);
+    kfree(mybuf);
 
     write_count++;
     return real_count;

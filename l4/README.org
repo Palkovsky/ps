@@ -7,8 +7,635 @@
 #+OPTIONS: html-postamble:nil
 #+HTML_HEAD: <style>pre.src {background-color: #303030; color: #e5e5e5;}</style>
 
+* Wstęp
+  Żaden z modułów nie kompilował się na wersji jądra 4.19.
+  
+  Naprawa modułów polegała na zastąpieniu linijki:
+  #+begin_src
+#include <asm/uaccess.h>
+  #+end_src  
+  linijką:
+  #+begin_src 
+#include <linux/uaccess.h>
+  #+end_src
+
+Dodatkowo w module trzecim kompilator wykrywał błąd w linii:
+#+begin_src c
+pid = simple_strtol(buf1,buf1+copy_size,10);
+#+end_src
+Błąd był spowodowany nieporawnym typem drugiego argumentu.
+Funkcja ~simple_strtol~ oczekuje typu ~char**~, gdzie ~buf1+copy_size~ to ~char*~.
+Aby zmusić moduł do kompilacji linia wprowadzono następującą zmianę:
+#+begin_src c
+pid = simple_strtol(buf1,(char**)buf1+copy_size,10);
+#+end_src
+
+Pojawia się również problem przy ładowaniu modułu o następującej treści:
+#+begin_src 
+[  +0,002971] broken_module: loading out-of-tree module taints kernel.
+[  +0,000036] broken_module: module verification failed: signature and/or required key missing - tainting kernel
+[  +0,000461] CHRDEV "broken" major requested (899) is greater than the maximum (511)
+[  +0,000001] Cannot register the /dev/broken device with major number: 899
+#+end_src
+Rozwiązanie polega na podmianie numeru urządzenia na coś poniżej 511, na przykład 500.
+
+  Urządzenie nie tworzy się automatycznie, dlatego po załadowaniu modułu uruchamiam:
+  #+begin_src bash
+    $ mknod /dev/broken c 500 0
+  #+end_src
 * Zadanie 1 - Moduł 1
+  Wykonuję następujące polecenia:
+  #+begin_src bash
+$ echo "broken" > /dev/broken
+$ echo "module" > /dev/broken
+$ cat /dev/broken
+  #+end_src
+
+  Po wykonaniu w ~dmesg~ pojawia się OOPS:
+  #+begin_src 
+[ +19,972068] BUG: unable to handle kernel paging request at fffff480d9fd7648
+[  +0,000002] PGD 0 P4D 0
+[  +0,000002] Oops: 0000 [#1] PREEMPT SMP NOPTI
+[  +0,000002] CPU: 6 PID: 2477 Comm: cat Tainted: G           OE     4.19.119-MANJARO #1
+[  +0,000001] Hardware name: VMware, Inc. VMware Virtual Platform/440BX Desktop Reference Platform, BIOS 6.00 07/29/2019
+[  +0,000004] RIP: 0010:kfree+0x52/0x1b0
+[  +0,000001] Code: 80 48 01 df 0f 82 67 01 00 00 48 c7 c0 00 00 00 80 48 2b 05 08 01 f0 00 48 01 c7 48 c1 ef 0c 48 c1 e7 06 48 03 3d e6 00 f0 00 <48> 8b 47 08 48 8d 50 ff a8 01 48 0f 45 fa 48 8b 57 08 48 8d 42 ff
+[  +0,000001] RSP: 0018:ffff98f302bc3dc8 EFLAGS: 00010282
+[  +0,000001] RAX: 0000763ec0000000 RBX: 00007fa73f5d9000 RCX: 0000000000000000
+[  +0,000001] RDX: 0000000000000003 RSI: ffff89c4e9b42623 RDI: fffff480d9fd7640
+[  +0,000000] RBP: ffff98f302bc3de0 R08: 0000000000000023 R09: 0000000000000080
+[  +0,000001] R10: ffff89c4ed807480 R11: 0000000040000000 R12: 00007fa73f5d9000
+[  +0,000001] R13: ffffffffc026d2ad R14: 0000000000000000 R15: ffff89c4bb5c1900
+[  +0,000001] FS:  00007fa73f5ce580(0000) GS:ffff89c4edd80000(0000) knlGS:0000000000000000
+[  +0,000001] CS:  0010 DS: 0000 ES: 0000 CR0: 0000000080050033
+[  +0,000000] CR2: fffff480d9fd7648 CR3: 00000003fe4c0000 CR4: 00000000003406e0
+[  +0,000014] Call Trace:
+[  +0,000006]  broken_read+0xad/0xe0 [broken_module]
+[  +0,000002]  __vfs_read+0x3b/0x1e0
+[  +0,000003]  ? security_file_permission+0x94/0xc0
+[  +0,000001]  ? security_file_permission+0x94/0xc0
+[  +0,000001]  vfs_read+0xab/0x150
+[  +0,000001]  ksys_read+0x5e/0xe0
+[  +0,000002]  __x64_sys_read+0x1a/0x20
+[  +0,000002]  do_syscall_64+0x53/0x140
+[  +0,000003]  entry_SYSCALL_64_after_hwframe+0x44/0xa9
+[  +0,000001] RIP: 0033:0x7fa73f4f74c2
+[  +0,000001] Code: c0 e9 c2 fe ff ff 50 48 8d 3d ba 11 0a 00 e8 95 eb 01 00 0f 1f 44 00 00 f3 0f 1e fa 64 8b 04 25 18 00 00 00 85 c0 75 10 0f 05 <48> 3d 00 f0 ff ff 77 56 c3 0f 1f 44 00 00 48 83 ec 28 48 89 54 24
+[  +0,000001] RSP: 002b:00007ffd04fb78e8 EFLAGS: 00000246 ORIG_RAX: 0000000000000000
+[  +0,000001] RAX: ffffffffffffffda RBX: 0000000000020000 RCX: 00007fa73f4f74c2
+[  +0,000000] RDX: 0000000000020000 RSI: 00007fa73f5d9000 RDI: 0000000000000003
+[  +0,000001] RBP: 00007fa73f5d9000 R08: 00007fa73f5d8010 R09: 0000000000000000
+[  +0,000001] R10: 0000000000000022 R11: 0000000000000246 R12: 0000561ae3f46c00
+[  +0,000000] R13: 0000000000000003 R14: 0000000000020000 R15: 0000000000020000
+[  +0,000002] Modules linked in: broken_module(OE) xt_conntrack ipt_MASQUERADE nf_conntrack_netlink nfnetlink xfrm_user xfrm_algo xt_addrtype iptable_filter iptable_nat nf_nat_ipv4 nf_nat nf_conntrack nf_defrag_ipv6 nf_defrag_ipv4 libcrc32c br_netfilter bridge stp llc overlay bnep btusb btrtl btbcm btintel bluetooth ecdh_generic vmw_vsock_vmci_transport vsock fuse rfkill vmwgfx squashfs ttm snd_ens1371 loop snd_ac97_codec gameport drm_kms_helper snd_rawmidi crct10dif_pclmul crc32_pclmul snd_seq_device ghash_clmulni_intel ac97_bus drm pcbc snd_pcm aesni_intel intel_agp snd_timer aes_x86_64 vmw_balloon crypto_simd joydev syscopyarea sysfillrect mousedev e1000 vmw_vmci snd cryptd intel_gtt input_leds psmouse sysimgblt pcspkr glue_helper soundcore agpgart i2c_piix4 fb_sys_fops evdev ac mac_hid crypto_user
+[  +0,000025]  ip_tables x_tables ext4 crc32c_generic crc16 mbcache jbd2 hid_generic usbhid hid sr_mod cdrom ata_generic pata_acpi serio_raw uhci_hcd atkbd libps2 crc32c_intel mptspi scsi_transport_spi ehci_pci mptscsih ehci_hcd mptbase ata_piix i8042 serio
+[  +0,000011] CR2: fffff480d9fd7648
+[  +0,000001] ---[ end trace 0394560b49be56b9 ]---
+[  +0,000002] RIP: 0010:kfree+0x52/0x1b0
+[  +0,000000] Code: 80 48 01 df 0f 82 67 01 00 00 48 c7 c0 00 00 00 80 48 2b 05 08 01 f0 00 48 01 c7 48 c1 ef 0c 48 c1 e7 06 48 03 3d e6 00 f0 00 <48> 8b 47 08 48 8d 50 ff a8 01 48 0f 45 fa 48 8b 57 08 48 8d 42 ff
+[  +0,000001] RSP: 0018:ffff98f302bc3dc8 EFLAGS: 00010282
+[  +0,000001] RAX: 0000763ec0000000 RBX: 00007fa73f5d9000 RCX: 0000000000000000
+[  +0,000000] RDX: 0000000000000003 RSI: ffff89c4e9b42623 RDI: fffff480d9fd7640
+[  +0,000001] RBP: ffff98f302bc3de0 R08: 0000000000000023 R09: 0000000000000080
+[  +0,000001] R10: ffff89c4ed807480 R11: 0000000040000000 R12: 00007fa73f5d9000
+[  +0,000000] R13: ffffffffc026d2ad R14: 0000000000000000 R15: ffff89c4bb5c1900
+[  +0,000001] FS:  00007fa73f5ce580(0000) GS:ffff89c4edd80000(0000) knlGS:0000000000000000
+[  +0,000001] CS:  0010 DS: 0000 ES: 0000 CR0: 0000000080050033
+[  +0,000000] CR2: fffff480d9fd7648 CR3: 00000003fe4c0000 CR4: 00000000003406e0
+  #+end_src
+
+Linijka
+#+begin_src 
+[ +19,972068] BUG: unable to handle kernel paging request at fffff480d9fd7648
+#+end_src
+sugeruje, że próbowaliśmy uzyskać dostęp do fragmentu przestrzeni adresowej, który nie posiada aktywnego mapowania w tablicy stron.
+
+
+  Z analizy call trace wynika, że błąd leci w linii:
+  #+begin_src c
+    kfree(user_buf);
+  #+end_src
+  Błąd polega na tym, że zwalniamy bufor w przestrzeni adresowej procesu.
+  Innymi słowy: nie mamy zmapowanych stron, do których próbujemy się dostać.
+  Nawet gdybyśmy mieli do nich dostęp, to alokatory w user i kernel space *chyba* są różne i nie ma gwarancji, że kfree() zwolniłby pamięć w sposób prawidłowy.
+  
+  Modyfikacja polega na podaniu prawidłowego buforu do zwolnienia:
+  #+begin_src c
+    kfree(mybuf)
+  #+end_src
+  
+  Teraz po wykonaniu tych samych poleceń otrzymujemy:
+  #+begin_src bash
+    $ insmod broken_module.ko
+    $ echo "broken" > /dev/broken
+    $ echo "module" > /dev/broken
+    $ cat /dev/broken
+    module
+    $
+  #+end_src
+
 * Zadanie 1 - Moduł 2
+  Wykonuję następujące polecenia:
+  #+begin_src bash
+$ echo "broken" > /dev/broken
+$ echo "module" > /dev/broken
+$ cat /dev/broken
+  #+end_src
+
+Dostajemy OOPSa:
+#+begin_src 
+[maj 2 02:12] BUG: unable to handle kernel NULL pointer dereference at 0000000000000000
+[  +0,000003] PGD 0 P4D 0
+[  +0,000002] Oops: 0002 [#1] PREEMPT SMP NOPTI
+[  +0,000002] CPU: 1 PID: 3008 Comm: cat Tainted: G           OE     4.19.119-MANJARO #1
+[  +0,000001] Hardware name: VMware, Inc. VMware Virtual Platform/440BX Desktop Reference Platform, BIOS 6.00 07/29/2019
+[  +0,000004] RIP: 0010:__memcpy+0x12/0x20
+[  +0,000001] Code: e4 94 7e ff 0f 31 48 c1 e2 20 48 09 c2 48 31 d3 e9 70 ff ff ff 90 90 90 0f 1f 44 00 00 48 89 f8 48 89 d1 48 c1 e9 03 83 e2 07 <f3> 48 a5 89 d1 f3 a4 c3 66 0f 1f 44 00 00 48 89 f8 48 89 d1 f3 a4
+[  +0,000001] RSP: 0018:ffff978c03cdbd18 EFLAGS: 00010202
+[  +0,000001] RAX: 0000000000000000 RBX: ffff978c03cdbd80 RCX: 0000000000000003
+[  +0,000001] RDX: 0000000000000007 RSI: ffffffffc03bd0b0 RDI: 0000000000000000
+[  +0,000000] RBP: ffff978c03cdbd70 R08: ffff9002ed807480 R09: 0000000000000000
+[  +0,000001] R10: ffff978c03cdbe60 R11: 0000000000000000 R12: 000000007fffffff
+[  +0,000001] R13: ffffffffc03bd0b0 R14: ffffffffc03bd0cf R15: 0000000000000000
+[  +0,000001] FS:  00007f66f7a3b580(0000) GS:ffff9002edc40000(0000) knlGS:0000000000000000
+[  +0,000000] CS:  0010 DS: 0000 ES: 0000 CR0: 0000000080050033
+[  +0,000001] CR2: 0000000000000000 CR3: 0000000400004000 CR4: 00000000003406e0
+[  +0,000014] Call Trace:
+[  +0,000003]  ? vsnprintf+0x39e/0x4e0
+[  +0,000002]  sprintf+0x56/0x70
+[  +0,000003]  ? kmem_cache_alloc_trace+0x185/0x1f0
+[  +0,000005]  fill_buffer+0x1e/0x30 [broken_module]
+[  +0,000001]  broken_read+0x45/0xe0 [broken_module]
+[  +0,000002]  __vfs_read+0x3b/0x1e0
+[  +0,000002]  ? security_file_permission+0x94/0xc0
+[  +0,000001]  ? security_file_permission+0x94/0xc0
+[  +0,000002]  vfs_read+0xab/0x150
+[  +0,000001]  ksys_read+0x5e/0xe0
+[  +0,000001]  __x64_sys_read+0x1a/0x20
+[  +0,000003]  do_syscall_64+0x53/0x140
+[  +0,000002]  entry_SYSCALL_64_after_hwframe+0x44/0xa9
+[  +0,000001] RIP: 0033:0x7f66f79644c2
+[  +0,000001] Code: c0 e9 c2 fe ff ff 50 48 8d 3d ba 11 0a 00 e8 95 eb 01 00 0f 1f 44 00 00 f3 0f 1e fa 64 8b 04 25 18 00 00 00 85 c0 75 10 0f 05 <48> 3d 00 f0 ff ff 77 56 c3 0f 1f 44 00 00 48 83 ec 28 48 89 54 24
+[  +0,000001] RSP: 002b:00007ffd50234008 EFLAGS: 00000246 ORIG_RAX: 0000000000000000
+[  +0,000001] RAX: ffffffffffffffda RBX: 0000000000020000 RCX: 00007f66f79644c2
+[  +0,000000] RDX: 0000000000020000 RSI: 00007f66f7a46000 RDI: 0000000000000003
+[  +0,000001] RBP: 00007f66f7a46000 R08: 00007f66f7a45010 R09: 0000000000000000
+[  +0,000001] R10: 0000000000000022 R11: 0000000000000246 R12: 0000558ad3001c00
+[  +0,000000] R13: 0000000000000003 R14: 0000000000020000 R15: 0000000000020000
+[  +0,000002] Modules linked in: broken_module(OE) bnep btusb btrtl btbcm btintel bluetooth ecdh_generic xt_conntrack ipt_MASQUERADE nf_conntrack_netlink nfnetlink xfrm_user xfrm_algo xt_addrtype iptable_filter iptable_nat nf_nat_ipv4 nf_nat nf_conntrack nf_defrag_ipv6 nf_defrag_ipv4 libcrc32c br_netfilter bridge stp llc overlay vmw_vsock_vmci_transport vsock snd_ens1371 rfkill snd_ac97_codec gameport snd_rawmidi snd_seq_device ac97_bus fuse snd_pcm snd_timer snd e1000 soundcore squashfs loop vmwgfx ttm crct10dif_pclmul crc32_pclmul ghash_clmulni_intel drm_kms_helper pcbc aesni_intel joydev aes_x86_64 drm mousedev vmw_balloon crypto_simd cryptd syscopyarea sysfillrect glue_helper intel_agp intel_gtt psmouse sysimgblt input_leds pcspkr vmw_vmci agpgart fb_sys_fops i2c_piix4 evdev mac_hid ac crypto_user
+[  +0,000025]  ip_tables x_tables ext4 crc32c_generic crc16 mbcache jbd2 hid_generic usbhid hid sr_mod cdrom ata_generic pata_acpi serio_raw atkbd libps2 uhci_hcd crc32c_intel mptspi scsi_transport_spi ehci_pci mptscsih ehci_hcd mptbase ata_piix i8042 serio [last unloaded: broken_module]
+[  +0,000010] CR2: 0000000000000000
+[  +0,000002] ---[ end trace 2bc9bc751de3fe73 ]---
+[  +0,000001] RIP: 0010:__memcpy+0x12/0x20
+[  +0,000001] Code: e4 94 7e ff 0f 31 48 c1 e2 20 48 09 c2 48 31 d3 e9 70 ff ff ff 90 90 90 0f 1f 44 00 00 48 89 f8 48 89 d1 48 c1 e9 03 83 e2 07 <f3> 48 a5 89 d1 f3 a4 c3 66 0f 1f 44 00 00 48 89 f8 48 89 d1 f3 a4
+[  +0,000000] RSP: 0018:ffff978c03cdbd18 EFLAGS: 00010202
+[  +0,000001] RAX: 0000000000000000 RBX: ffff978c03cdbd80 RCX: 0000000000000003
+[  +0,000001] RDX: 0000000000000007 RSI: ffffffffc03bd0b0 RDI: 0000000000000000
+[  +0,000000] RBP: ffff978c03cdbd70 R08: ffff9002ed807480 R09: 0000000000000000
+[  +0,000001] R10: ffff978c03cdbe60 R11: 0000000000000000 R12: 000000007fffffff
+[  +0,000001] R13: ffffffffc03bd0b0 R14: ffffffffc03bd0cf R15: 0000000000000000
+[  +0,000000] FS:  00007f66f7a3b580(0000) GS:ffff9002edc40000(0000) knlGS:0000000000000000
+[  +0,000001] CS:  0010 DS: 0000 ES: 0000 CR0: 0000000080050033
+[  +0,000001] CR2: 0000000000000000 CR3: 0000000400004000 CR4: 00000000003406e0
+#+end_src
+
+Linie
+#+begin_src 
+[maj 2 02:12] BUG: unable to handle kernel NULL pointer dereference at 0000000000000000
+...
+[  +0,000004] RIP: 0010:__memcpy+0x12/0x20
+[  +0,000014] Call Trace:
+[  +0,000003]  ? vsnprintf+0x39e/0x4e0
+[  +0,000002]  sprintf+0x56/0x70
+[  +0,000003]  ? kmem_cache_alloc_trace+0x185/0x1f0
+[  +0,000005]  fill_buffer+0x1e/0x30 [broken_module]
+[  +0,000001]  broken_read+0x45/0xe0 [broken_module]
+#+end_src
+sugerują, że w ~memcpy()~ próbujemy zdereferencować NULLa.
+Ponieważ ostatnimi wywołanymi funkcjami w debugowanym module są ~broken_read()~ i ~fill_buffer()~, to im będziemy się przyglądać.
+
+~broken_read()~ przekazuje do ~fill_buffer()~ bufor o wielkości 100:
+#+begin_src c
+  char* buf = NULL;
+  int buf_size = 100;
+  
+   buf = kmalloc(buf_size, GFP_KERNEL);
+   if (buf == 0) {
+      broken_exit();
+      return -ENOMEM;
+   } else {
+      fill_buffer(buf,buf_size);
+   }
+#+end_src
+
+Ostatnia linia w naszym kodzie przed crashem to wywołanie ~sprintf()~:
+#+begin_src c
+int fill_buffer(char* buf, int buf_size) {
+    sprintf(mybuf, "I've created a buffer of size: %d\n", buf_size);
+    return strlen(mybuf);
+}
+#+end_src
+
+Mamy tutaj do czynienia z literówką, ponieważ ~fill_buffer()~ nie używa otrzymanego buforu, tylko bufor globalny, który jest zadeklarowany jako:
+#+begin_src c
+char *mybuf=NULL;
+#+end_src
+I jest to jedyne miejsce w kodzie, gdzie ~mybuf~ jest użyte.
+
+Naprawa buga polega na modyfikacj ~fill_buffer()~ tak aby używała wskaźnika otrzymanego w parametrze:
+#+begin_src c
+int fill_buffer(char* buf, int buf_size) {
+    sprintf(buf, "I've created a buffer of size: %d\n", buf_size);
+    return strlen(buf);
+}
+#+end_src
+
+Po wprowadzeniu zmian:
+#+begin_src bash
+$ echo "broken" > /dev/broken
+$ echo "module" > /dev/broken
+$ cat /dev/broken
+I've created a buffer of size: 100
+$
+#+end_src
+
 * Zadanie 1 - Moduł 3
+  Wpisujemy PID shella(niekoniecznie naszego) do /dev/broken:
+  #+begin_src bash
+$ echo $(pgrep $0 | head -n1) > /dev/broken
+  #+end_src
+
+  Otrzymujemy OOPSa:
+  #+begin_src 
+[maj 2 02:31] BUG: unable to handle kernel NULL pointer dereference at 0000000000000657
+[  +0,000003] PGD 0 P4D 0
+[  +0,000002] Oops: 0000 [#1] PREEMPT SMP NOPTI
+[  +0,000002] CPU: 1 PID: 1623 Comm: bash Tainted: G           OE     4.19.119-MANJARO #1
+[  +0,000002] Hardware name: VMware, Inc. VMware Virtual Platform/440BX Desktop Reference Platform, BIOS 6.00 07/29/2019
+[  +0,000004] RIP: 0010:strcpy+0x5/0x20
+[  +0,000001] Code: ea 01 48 8d 54 10 01 eb 09 48 83 c0 01 48 39 d0 74 9b 40 3a 30 74 f2 c3 48 85 c0 74 b1 c3 48 89 f8 c3 0f 1f 00 48 89 f8 31 d2 <0f> b6 0c 16 88 0c 10 48 83 c2 01 84 c9 75 f1 c3 66 66 2e 0f 1f 84
+[  +0,000001] RSP: 0018:ffffa2ea82793de0 EFLAGS: 00010246
+[  +0,000001] RAX: ffff9f842b1c2800 RBX: 0000000000000005 RCX: ffff9f84146e0028
+[  +0,000001] RDX: 0000000000000000 RSI: 0000000000000657 RDI: ffff9f842b1c2800
+[  +0,000001] RBP: ffffa2ea82793df0 R08: ffff9f8400b84200 R09: ffff9f84146e0000
+[  +0,000001] R10: 0000000000000000 R11: 0000000000000040 R12: 0000000000000657
+[  +0,000001] R13: 00005616495a7720 R14: ffff9f842b1c2800 R15: 00005616495a7720
+[  +0,000001] FS:  00007f89ee730b80(0000) GS:ffff9f842dc40000(0000) knlGS:0000000000000000
+[  +0,000001] CS:  0010 DS: 0000 ES: 0000 CR0: 0000000080050033
+[  +0,000001] CR2: 0000000000000657 CR3: 00000003fd6a0000 CR4: 00000000003406e0
+[  +0,000015] Call Trace:
+[  +0,000006]  ? fill_buffer_with_process_name+0x35/0x60 [broken_module]
+[  +0,000002]  broken_write+0x7e/0x90 [broken_module]
+[  +0,000004]  __vfs_write+0x3b/0x1f0
+[  +0,000003]  ? __audit_syscall_entry+0xdb/0x120
+[  +0,000002]  vfs_write+0xb9/0x1a0
+[  +0,000001]  ksys_write+0x5e/0xe0
+[  +0,000002]  __x64_sys_write+0x1a/0x20
+[  +0,000002]  do_syscall_64+0x53/0x140
+[  +0,000003]  entry_SYSCALL_64_after_hwframe+0x44/0xa9
+[  +0,000001] RIP: 0033:0x7f89ee893567
+[  +0,000001] Code: 64 89 02 48 c7 c0 ff ff ff ff eb bb 0f 1f 80 00 00 00 00 f3 0f 1e fa 64 8b 04 25 18 00 00 00 85 c0 75 10 b8 01 00 00 00 0f 05 <48> 3d 00 f0 ff ff 77 51 c3 48 83 ec 28 48 89 54 24 18 48 89 74 24
+[  +0,000001] RSP: 002b:00007ffe1a9d5928 EFLAGS: 00000246 ORIG_RAX: 0000000000000001
+[  +0,000001] RAX: ffffffffffffffda RBX: 0000000000000005 RCX: 00007f89ee893567
+[  +0,000001] RDX: 0000000000000005 RSI: 00005616495a7720 RDI: 0000000000000001
+[  +0,000001] RBP: 00005616495a7720 R08: 000000000000000a R09: 0000000000000004
+[  +0,000001] R10: 00005616495a2000 R11: 0000000000000246 R12: 0000000000000005
+[  +0,000000] R13: 00007f89ee963500 R14: 0000000000000005 R15: 00007f89ee963700
+[  +0,000002] Modules linked in: broken_module(OE) bnep btusb btrtl btbcm btintel bluetooth ecdh_generic xt_conntrack ipt_MASQUERADE nf_conntrack_netlink nfnetlink xfrm_user xfrm_algo xt_addrtype iptable_filter iptable_nat nf_nat_ipv4 nf_nat nf_conntrack nf_defrag_ipv6 nf_defrag_ipv4 libcrc32c br_netfilter bridge stp llc vmw_vsock_vmci_transport overlay vsock snd_ens1371 snd_ac97_codec gameport snd_rawmidi snd_seq_device ac97_bus snd_pcm snd_timer snd e1000 soundcore rfkill vmwgfx fuse ttm squashfs drm_kms_helper loop crct10dif_pclmul joydev drm crc32_pclmul ghash_clmulni_intel pcbc vmw_balloon syscopyarea mousedev aesni_intel aes_x86_64 intel_agp crypto_simd cryptd sysfillrect intel_gtt sysimgblt glue_helper psmouse input_leds pcspkr vmw_vmci agpgart i2c_piix4 fb_sys_fops ac evdev mac_hid crypto_user
+[  +0,000029]  ip_tables x_tables ext4 crc32c_generic crc16 mbcache jbd2 hid_generic usbhid hid sr_mod cdrom ata_generic pata_acpi serio_raw atkbd libps2 uhci_hcd crc32c_intel mptspi scsi_transport_spi ehci_pci mptscsih ehci_hcd mptbase ata_piix i8042 serio [last unloaded: broken_module]
+[  +0,000011] CR2: 0000000000000657
+[  +0,000002] ---[ end trace b44798be21a3701c ]---
+[  +0,000002] RIP: 0010:strcpy+0x5/0x20
+[  +0,000001] Code: ea 01 48 8d 54 10 01 eb 09 48 83 c0 01 48 39 d0 74 9b 40 3a 30 74 f2 c3 48 85 c0 74 b1 c3 48 89 f8 c3 0f 1f 00 48 89 f8 31 d2 <0f> b6 0c 16 88 0c 10 48 83 c2 01 84 c9 75 f1 c3 66 66 2e 0f 1f 84
+[  +0,000001] RSP: 0018:ffffa2ea82793de0 EFLAGS: 00010246
+[  +0,000001] RAX: ffff9f842b1c2800 RBX: 0000000000000005 RCX: ffff9f84146e0028
+[  +0,000000] RDX: 0000000000000000 RSI: 0000000000000657 RDI: ffff9f842b1c2800
+[  +0,000001] RBP: ffffa2ea82793df0 R08: ffff9f8400b84200 R09: ffff9f84146e0000
+[  +0,000001] R10: 0000000000000000 R11: 0000000000000040 R12: 0000000000000657
+[  +0,000001] R13: 00005616495a7720 R14: ffff9f842b1c2800 R15: 00005616495a7720
+[  +0,000001] FS:  00007f89ee730b80(0000) GS:ffff9f842dc40000(0000) knlGS:0000000000000000
+[  +0,000001] CS:  0010 DS: 0000 ES: 0000 CR0: 0000000080050033
+[  +0,000000] CR2: 0000000000000657 CR3: 00000003fd6a0000 CR4: 00000000003406e0
+  #+end_src
+
+Linie:
+#+begin_src 
+[maj 2 02:31] BUG: unable to handle kernel NULL pointer dereference at 0000000000000657
+...
+[  +0,000004] RIP: 0010:strcpy+0x5/0x20
+[  +0,000015] Call Trace:
+[  +0,000006]  ? fill_buffer_with_process_name+0x35/0x60 [broken_module]
+[  +0,000002]  broken_write+0x7e/0x90 [broken_module]
+#+end_src
+sugerują, że próbujemy zdereferocować NULLa w funkcji ~strcpy()~, którą wywołujemy wewnątrz ~fill_buffer_with_process_name()~.
+
+#+begin_src c
+void fill_buffer_with_process_name(long pid) {
+ struct pid *selected_pid = find_get_pid(pid);
+ struct task_struct *selected_proc = pid_task(selected_pid, PIDTYPE_PID);
+
+ if (selected_proc != NULL) {
+      strcpy(buf1,(char*) selected_proc->pid);
+ } else {
+      sprintf(buf1,"The process with PID: %ld cannot be found",pid);
+ }
+}
+#+end_src
+
+~buf1~ jest zadeklarowany w następujący sposób:
+#+begin_src 
+char* buf1;
+int buf1_size=2048;
+#+end_src
+
+Przeszukanie pliku pokazuje, że buf1 jest prawidłowo alokowany wewnątrz ~broken_init()~:
+#+begin_src c
+  buf1 = (char*) kmalloc( buf1_size, GFP_KERNEL);
+#+end_src
+I dealokowany wewnątrz ~broken_exit()~
+#+begin_src c
+  /* Zwolnienie bufora */
+  if (buf1)
+    kfree(buf1)
+#+end_src
+
+W takim razie problematycznym wskaźnikiem musi być drugi argument przekazany do ~strcpy()~.
+Po przyjrzeniu się definicji struktury ~task_struct()~ widzimy, że pole ~pid~ jest typy ~pid_t~.
+
+~pid_t~ jest aliasem na ~int~:
+#+begin_src c
+// linux/types.h
+typedef __kernel_pid_t          pid_t;
+// posix_types.h
+#ifndef __kernel_pid_t
+  typedef int             __kernel_pid_t;
+#endif
+#+end_src
+
+Rzutowanie
+#+begin_src c
+(char*) selected_proc->pid
+#+end_src
+powoduje przekazanie jakiegoś adresu z zakresu 0-32768 jako argument do ~strcpy()~.
+
+Czemu od 0-32768? Bo taki jest maksymalny dozwolony PID w Linuxie.
+W przypadku naszego OOPSa był to PID 657:
+#+begin_src 
+[maj 2 02:31] BUG: unable to handle kernel NULL pointer dereference at 0000000000000657
+#+end_src
+
+Ponieważ funkcja nazywa się ~fill_buffer_with_process_name~, to zamiast PIDu powinniśmy ładować nazwę procesu.
+Można się do niej dostać poprzez pole ~comm~ w strukturze ~task_struct~.
+
+#+begin_src c
+void fill_buffer_with_process_name(long pid) {
+ struct pid *selected_pid = find_get_pid(pid);
+ struct task_struct *selected_proc = pid_task(selected_pid, PIDTYPE_PID);
+
+ if (selected_proc != NULL) {
+      strcpy(buf1,selected_proc->comm);
+ } else {
+      sprintf(buf1,"The process with PID: %ld cannot be found",pid);
+ }
+}
+#+end_src
+
+Po wprowadzeniu zmiany:
+#+begin_src bash
+$ echo $(pgrep $0 | head -n1) > /dev/broken
+$ cat /dev/broken
+Process name: bash
+$
+#+end_src
+
+Kod posiada jeszcze jedną niedoskonałość, która nie powoduje błędu, ale powoduje zapis poza zaalokowanym buforem.
+Chodzi o linię:
+#+begin_src c
+pid = simple_strtol(buf1,(char**)buf1+copy_size,10);
+#+end_src
+
+Drugi argument jest wskaźnikiem na koniec sparsowanego stringa.
+Powyższy kod wpisuje *adres* miejsca w którym ~simple_strtol()~ skończył parsowanie za buforem ~buf1~.
+Naprawa:
+#+begin_src c
+char *end;
+...
+pid = simple_strtol(buf1, &end, 10);
+#+end_src
+
 * Zadanie 1 - Moduł 4
+Wykonujemy:
+  #+begin_src bash
+$ cat /dev/broken
+$ echo "abcd123" > /dev/broken
+$ cat /dev/broken
+  #+end_src
+
+Po wykonaniu drugiego polecenia otrzymujemy błąd:
+#+begin_src 
+[maj 2 03:09] usercopy: Kernel memory overwrite attempt detected to null address (offset 0, size 8)!
+[  +0,000007] ------------[ cut here ]------------
+[  +0,000001] kernel BUG at mm/usercopy.c:103!
+[  +0,000005] invalid opcode: 0000 [#1] PREEMPT SMP NOPTI
+[  +0,000002] CPU: 2 PID: 1800 Comm: bash Tainted: G           OE     4.19.119-MANJARO #1
+[  +0,000001] Hardware name: VMware, Inc. VMware Virtual Platform/440BX Desktop Reference Platform, BIOS 6.00 07/29/2019
+[  +0,000005] RIP: 0010:usercopy_abort+0x7b/0x7d
+[  +0,000002] Code: 4c 0f 45 de 51 4c 89 d1 48 c7 c2 33 6b 4d 98 57 48 c7 c6 2c 53 4c 98 48 c7 c7 f8 6b 4d 98 48 0f 45 f2 4c 89 da e8 68 fb e5 ff <0f> 0b 4c 89 e1 49 89 d8 44 89 ea 31 f6 48 29 c1 48 c7 c7 75 6b 4d
+[  +0,000001] RSP: 0018:ffffaf43c242bda8 EFLAGS: 00010246
+[  +0,000002] RAX: 0000000000000056 RBX: 0000000000000008 RCX: 0000000000000000
+[  +0,000001] RDX: 0000000000000000 RSI: ffffffff9854a1e7 RDI: 00000000ffffffff
+[  +0,000000] RBP: ffffaf43c242bdc0 R08: 0000000000000001 R09: 00000000000006cd
+[  +0,000001] R10: 00000000000271c8 R11: ffffffff98934ecd R12: 0000000000000000
+[  +0,000001] R13: 0000000000000000 R14: 0000000000000008 R15: 000055b47eaf0750
+[  +0,000001] FS:  00007fc4e0102b80(0000) GS:ffff946fedc80000(0000) knlGS:0000000000000000
+[  +0,000001] CS:  0010 DS: 0000 ES: 0000 CR0: 0000000080050033
+[  +0,000001] CR2: 000055b47eaf3bf0 CR3: 00000004161ce000 CR4: 00000000003406e0
+[  +0,000017] Call Trace:
+[  +0,000004]  __check_object_size.cold+0x5d/0x83
+[  +0,000005]  broken_write+0x46/0xb0 [broken_module]
+[  +0,000002]  __vfs_write+0x3b/0x1f0
+[  +0,000003]  ? __audit_syscall_entry+0xdb/0x120
+[  +0,000002]  vfs_write+0xb9/0x1a0
+[  +0,000001]  ksys_write+0x5e/0xe0
+[  +0,000002]  __x64_sys_write+0x1a/0x20
+[  +0,000002]  do_syscall_64+0x53/0x140
+[  +0,000004]  entry_SYSCALL_64_after_hwframe+0x44/0xa9
+[  +0,000002] RIP: 0033:0x7fc4e0265567
+[  +0,000001] Code: 64 89 02 48 c7 c0 ff ff ff ff eb bb 0f 1f 80 00 00 00 00 f3 0f 1e fa 64 8b 04 25 18 00 00 00 85 c0 75 10 b8 01 00 00 00 0f 05 <48> 3d 00 f0 ff ff 77 51 c3 48 83 ec 28 48 89 54 24 18 48 89 74 24
+[  +0,000001] RSP: 002b:00007ffcd4e62918 EFLAGS: 00000246 ORIG_RAX: 0000000000000001
+[  +0,000001] RAX: ffffffffffffffda RBX: 0000000000000008 RCX: 00007fc4e0265567
+[  +0,000001] RDX: 0000000000000008 RSI: 000055b47eaf0750 RDI: 0000000000000001
+[  +0,000001] RBP: 000055b47eaf0750 R08: 000000000000000a R09: 0000000000000007
+[  +0,000001] R10: 000055b47eaeac80 R11: 0000000000000246 R12: 0000000000000008
+[  +0,000001] R13: 00007fc4e0335500 R14: 0000000000000008 R15: 00007fc4e0335700
+[  +0,000003] Modules linked in: broken_module(OE) bnep btusb btrtl btbcm btintel bluetooth ecdh_generic xt_conntrack ipt_MASQUERADE nf_conntrack_netlink nfnetlink xfrm_user xfrm_algo xt_addrtype iptable_filter iptable_nat nf_nat_ipv4 nf_nat nf_conntrack nf_defrag_ipv6 nf_defrag_ipv4 libcrc32c br_netfilter bridge stp llc snd_ens1371 overlay snd_ac97_codec gameport snd_rawmidi snd_seq_device ac97_bus snd_pcm vmw_vsock_vmci_transport vsock snd_timer snd e1000 soundcore rfkill fuse squashfs vmwgfx loop ttm drm_kms_helper joydev mousedev crct10dif_pclmul crc32_pclmul ghash_clmulni_intel drm pcbc vmw_balloon psmouse aesni_intel intel_agp input_leds pcspkr aes_x86_64 crypto_simd vmw_vmci cryptd i2c_piix4 syscopyarea intel_gtt sysfillrect glue_helper sysimgblt agpgart fb_sys_fops evdev mac_hid ac crypto_user
+[  +0,000028]  ip_tables x_tables ext4 crc32c_generic crc16 mbcache jbd2 hid_generic usbhid hid sr_mod cdrom ata_generic pata_acpi serio_raw atkbd libps2 uhci_hcd crc32c_intel mptspi scsi_transport_spi ehci_pci mptscsih ehci_hcd mptbase ata_piix i8042 serio [last unloaded: broken_module]
+[  +0,000013] ---[ end trace 38a70b4e058dbb09 ]---
+[  +0,000001] RIP: 0010:usercopy_abort+0x7b/0x7d
+[  +0,000001] Code: 4c 0f 45 de 51 4c 89 d1 48 c7 c2 33 6b 4d 98 57 48 c7 c6 2c 53 4c 98 48 c7 c7 f8 6b 4d 98 48 0f 45 f2 4c 89 da e8 68 fb e5 ff <0f> 0b 4c 89 e1 49 89 d8 44 89 ea 31 f6 48 29 c1 48 c7 c7 75 6b 4d
+[  +0,000001] RSP: 0018:ffffaf43c242bda8 EFLAGS: 00010246
+[  +0,000001] RAX: 0000000000000056 RBX: 0000000000000008 RCX: 0000000000000000
+[  +0,000001] RDX: 0000000000000000 RSI: ffffffff9854a1e7 RDI: 00000000ffffffff
+[  +0,000001] RBP: ffffaf43c242bdc0 R08: 0000000000000001 R09: 00000000000006cd
+[  +0,000001] R10: 00000000000271c8 R11: ffffffff98934ecd R12: 0000000000000000
+[  +0,000000] R13: 0000000000000000 R14: 0000000000000008 R15: 000055b47eaf0750
+[  +0,000001] FS:  00007fc4e0102b80(0000) GS:ffff946fedc80000(0000) knlGS:0000000000000000
+[  +0,000001] CS:  0010 DS: 0000 ES: 0000 CR0: 0000000080050033
+[  +0,000001] CR2: 000055b47eaf3bf0 CR3: 00000004161ce000 CR4: 00000000003406e0
+#+end_src
+
+Linie:
+#+begin_src 
+[maj 2 03:09] usercopy: Kernel memory overwrite attempt detected to null address (offset 0, size 8)!
+[  +0,000005] RIP: 0010:usercopy_abort+0x7b/0x7d
+[  +0,000017] Call Trace:
+[  +0,000004]  __check_object_size.cold+0x5d/0x83
+[  +0,000005]  broken_write+0x46/0xb0 [broken_module]
+#+end_src
+zmów mówią o błędach ze wskaźnikami.
+
+Ostatnie miejsce w naszym kodzie przed błędem to: ~broken_write+0x46~.
+Po użyciu ~objdump~:
+#+begin_src 
+0000000000000120 <broken_write>:
+ 120:   e8 00 00 00 00          callq  125 <broken_write+0x5>
+ 125:   55                      push   %rbp
+ 126:   48 8b 3d 00 00 00 00    mov    0x0(%rip),%rdi
+ 12d:   48 89 e5                mov    %rsp,%rbp
+ 130:   41 55                   push   %r13
+ 132:   49 89 f5                mov    %rsi,%r13
+ 135:   be c0 00 60 00          mov    $0x6000c0,%esi
+ 13a:   41 54                   push   %r12
+ 13c:   41 bc 64 00 00 00       mov    $0x64,%r12d
+ 142:   53                      push   %rbx
+ 143:   48 89 d3                mov    %rdx,%rbx
+ 146:   ba 64 00 00 00          mov    $0x64,%edx
+=============== TO JEST WYWOŁANIE kmalloc() =====================
+ 14b:   e8 00 00 00 00          callq  150 <broken_write+0x30>   
+==================================================================
+ 150:   83 fb 64                cmp    $0x64,%ebx
+ 153:   44 0f 4e e3             cmovle %ebx,%r12d
+ 157:   31 d2                   xor    %edx,%edx
+ 159:   31 ff                   xor    %edi,%edi   
+ 15b:   4d 63 e4                movslq %r12d,%r12
+ 15e:   4c 89 e6                mov    %r12,%rsi
+=============== TO JEST WYWOŁANIE copy_from_user() ================
+ 161:   e8 00 00 00 00          callq  166 <broken_write+0x46>
+===================================================================  
+ 166:   4c 89 e2                mov    %r12,%rdx
+ 169:   4c 89 ee                mov    %r13,%rsi
+ 16c:   31 ff                   xor    %edi,%edi
+ 16e:   e8 00 00 00 00          callq  173 <broken_write+0x53>
+ 173:   c6 04 25 64 00 00 00    movb   $0x0,0x64
+#+end_src
+
+Swoją drogą właśnie się dowiedziałem, że moduły jądra relokują kod bezpośrednio z sekcji ~.text~, a nie z GOTów.
+Mimo to pojawiają się relokacje ~R_X86_64_PLT32~, chyba loader kernelowy traktuje je jakoś specjalnie.
+
+Problemem muszą być parametry ~copy_from_user()~:
+#+begin_src c
+err = copy_from_user(mybuf,user_buf,real_count);
+#+end_src
+
+Po szybkich oględzniach można zauważyć, że nie odczytujemy wyniku ~kmalloc()~:
+#+begin_src c
+  char* mybuf = NULL;
+  ...
+  // Initialize the memory
+  kmalloc(mybuf_size, GFP_KERNEL);
+  ...
+  // Copy the buffer from user space
+  err = copy_from_user(mybuf,user_buf,real_count);
+  ..
+#+end_src
+
+Naprawa błędu polega na zamianie linijki z ~kmalloc()~ na:
+#+begin_src c
+mybuf = kmalloc(mybuf_size+1, GFP_KERNEL);
+#+end_src
+
+Po zmianie wciąż otrzymujemy OOPSa o innej treści:
+#+begin_src
+[  +0,000006] BUG: unable to handle kernel NULL pointer dereference at 0000000000000000
+[  +0,000003] PGD 0 P4D 0
+[  +0,000002] Oops: 0000 [#6] PREEMPT SMP NOPTI
+[  +0,000002] CPU: 5 PID: 4558 Comm: bash Tainted: G      D    OE     4.19.119-MANJARO #1
+[  +0,000001] Hardware name: VMware, Inc. VMware Virtual Platform/440BX Desktop Reference Platform, BIOS 6.00 07/29/2019
+[  +0,000004] RIP: 0010:count_numbers+0x1a/0x37 [broken_module]
+[  +0,000001] Code: 5d c3 e8 ee fe ff ff 48 c7 c0 f4 ff ff ff eb e9 0f 1f 44 00 00 55 48 c7 c7 a6 81 2b c0 48 89 e5 e8 a3 89 23 e9 31 c0 45 31 c0 <80> 38 00 74 13 0f be 50 01 83 ea 30 83 fa 0a 41 83 d0 00 48 ff c0
+[  +0,000001] RSP: 0018:ffff95dd425b7de8 EFLAGS: 00010246
+[  +0,000001] RAX: 0000000000000000 RBX: 0000000000000008 RCX: 0000000000000000
+[  +0,000000] RDX: 0000000000000000 RSI: ffffffffaa9352c6 RDI: 0000000000000246
+[  +0,000001] RBP: ffff95dd425b7de8 R08: 0000000000000000 R09: ffff95dd425b7d88
+[  +0,000001] R10: ffff8e1f2d807480 R11: 0000000040000000 R12: 0000000000000008
+[  +0,000001] R13: ffff8e1f276c7e00 R14: 0000558a93ea1750 R15: 0000558a93ea1750
+[  +0,000001] FS:  00007f90d7ec3b80(0000) GS:ffff8e1f2dd40000(0000) knlGS:0000000000000000
+[  +0,000000] CS:  0010 DS: 0000 ES: 0000 CR0: 0000000080050033
+[  +0,000001] CR2: 0000000000000000 CR3: 0000000428104000 CR4: 00000000003406e0
+[  +0,000015] Call Trace:
+[  +0,000003]  broken_write.cold+0x2f/0x37 [broken_module]
+[  +0,000004]  __vfs_write+0x3b/0x1f0
+[  +0,000003]  ? __audit_syscall_entry+0xdb/0x120
+[  +0,000001]  vfs_write+0xb9/0x1a0
+[  +0,000002]  ksys_write+0x5e/0xe0
+[  +0,000001]  __x64_sys_write+0x1a/0x20
+[  +0,000002]  do_syscall_64+0x53/0x140
+[  +0,000003]  entry_SYSCALL_64_after_hwframe+0x44/0xa9
+[  +0,000001] RIP: 0033:0x7f90d8026567
+[  +0,000001] Code: 64 89 02 48 c7 c0 ff ff ff ff eb bb 0f 1f 80 00 00 00 00 f3 0f 1e fa 64 8b 04 25 18 00 00 00 85 c0 75 10 b8 01 00 00 00 0f 05 <48> 3d 00 f0 ff ff 77 51 c3 48 83 ec 28 48 89 54 24 18 48 89 74 24
+[  +0,000000] RSP: 002b:00007ffc225c2a08 EFLAGS: 00000246 ORIG_RAX: 0000000000000001
+[  +0,000001] RAX: ffffffffffffffda RBX: 0000000000000008 RCX: 00007f90d8026567
+[  +0,000001] RDX: 0000000000000008 RSI: 0000558a93ea1750 RDI: 0000000000000001
+[  +0,000001] RBP: 0000558a93ea1750 R08: 000000000000000a R09: 0000000000000007
+[  +0,000000] R10: 0000558a93edaf50 R11: 0000000000000246 R12: 0000000000000008
+[  +0,000001] R13: 00007f90d80f6500 R14: 0000000000000008 R15: 00007f90d80f6700
+[  +0,000001] Modules linked in: broken_module(OE) bnep btusb btrtl btbcm btintel bluetooth ecdh_generic xt_conntrack ipt_MASQUERADE nf_conntrack_netlink nfnetlink xfrm_user xfrm_algo xt_addrtype iptable_filter iptable_nat nf_nat_ipv4 nf_nat nf_conntrack nf_defrag_ipv6 nf_defrag_ipv4 libcrc32c br_netfilter bridge stp llc overlay vmw_vsock_vmci_transport vsock rfkill fuse vmwgfx squashfs ttm loop drm_kms_helper snd_ens1371 snd_ac97_codec gameport snd_rawmidi crct10dif_pclmul snd_seq_device crc32_pclmul ghash_clmulni_intel ac97_bus drm pcbc snd_pcm joydev aesni_intel mousedev snd_timer aes_x86_64 crypto_simd vmw_balloon syscopyarea snd psmouse cryptd glue_helper intel_agp input_leds sysfillrect intel_gtt e1000 sysimgblt pcspkr vmw_vmci soundcore agpgart fb_sys_fops i2c_piix4 evdev ac mac_hid crypto_user
+[  +0,000027]  ip_tables x_tables ext4 crc32c_generic crc16 mbcache jbd2 hid_generic usbhid hid sr_mod cdrom ata_generic pata_acpi serio_raw atkbd libps2 uhci_hcd crc32c_intel mptspi scsi_transport_spi ehci_pci mptscsih ehci_hcd mptbase ata_piix i8042 serio [last unloaded: broken_module]
+[  +0,000011] CR2: 0000000000000000
+[  +0,000001] ---[ end trace 59a936711f190f5f ]---
+[  +0,000001] RIP: 0010:0xffffffffc02a1191
+[  +0,000003] Code: Bad RIP value.
+[  +0,000001] RSP: 0018:ffff95dd4254fdf8 EFLAGS: 00010246
+[  +0,000000] RAX: 0000000000000000 RBX: 0000000000000008 RCX: 0000000000000000
+[  +0,000001] RDX: 0000000000000000 RSI: 0000560d691f2708 RDI: ffff8e1f20e3d808
+[  +0,000001] RBP: ffff95dd4254fe18 R08: 0000000000000008 R09: 0000000000000080
+[  +0,000000] R10: ffff8e1f2d807480 R11: 0000000040000000 R12: 0000000000000008
+[  +0,000001] R13: ffff8e1f20e3d800 R14: 0000560d691f2700 R15: 0000560d691f2700
+[  +0,000001] FS:  00007f90d7ec3b80(0000) GS:ffff8e1f2dd40000(0000) knlGS:0000000000000000
+[  +0,000000] CS:  0010 DS: 0000 ES: 0000 CR0: 0000000080050033
+[  +0,000001] CR2: ffffffffc02a1167 CR3: 0000000428104000 CR4: 00000000003406e0
+#+end_src
+
+Tym razem występuje dereferencja NULLa w funkcji ~count_numbers()~:
+#+begin_src c
+int count_numbers(char* str) {
+   int numbers = 0;
+   char* ptr = 0;
+
+   while (*ptr != 0) {
+     ptr++;
+     if (isdigit(*ptr))
+ 	numbers++;
+   }
+
+   return numbers;
+}
+#+end_src
+
+Nie trudno zauważyć, że argument jest ignorowany.
+Wystarczy poprawić incjalizację zmiennej ~ptr~:
+#+begin_src c
+char* ptr = str;
+#+end_src
+
+Po zmianach:
+#+begin_src bash
+$ cat /dev/broken
+I've recently read 0 numeric characters
+$ echo "abcd123" > /dev/broken
+$ cat /dev/broken
+I've recently read 3 numeric characters
+$
+#+end_src
+
 * Zadanie 2 - GDB

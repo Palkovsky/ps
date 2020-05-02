@@ -64,10 +64,10 @@ int broken_release(struct inode *inode, struct file *filp) {
 ssize_t broken_read(struct file *filp, char *buf, size_t count, loff_t *f_pos) {
     int buf2_count=0;
     int error=0;
-    
+
     snprintf(buf2, buf1_size, "Process name: %s\n", buf1);
     buf2_count = strlen(buf2);
-    
+
     error = copy_to_user(buf, buf2,buf2_count);
 
     read_count++;
@@ -85,7 +85,7 @@ void fill_buffer_with_process_name(long pid) {
  struct task_struct *selected_proc = pid_task(selected_pid, PIDTYPE_PID);
 
  if (selected_proc != NULL) {
-      strcpy(buf1,(char*) selected_proc->pid);
+      strcpy(buf1,selected_proc->comm);
  } else {
       sprintf(buf1,"The process with PID: %ld cannot be found",pid);
  }
@@ -93,7 +93,7 @@ void fill_buffer_with_process_name(long pid) {
 
 ssize_t broken_write(struct file *filp, const char *buf, size_t count, loff_t *f_pos) {
     int error;
-
+    char *end;
     long pid=0;
 
     int copy_size=count;
@@ -105,7 +105,7 @@ ssize_t broken_write(struct file *filp, const char *buf, size_t count, loff_t *f
 
 
     // Sprobujmy sparsowac liczbe...
-    pid = simple_strtol(buf1,(char**)buf1+copy_size,10);
+    pid = simple_strtol(buf1, &end,10);
 
     if (pid < 1) {
 	printk(KERN_WARNING "Invalid PID number\n");
@@ -126,10 +126,9 @@ ssize_t broken_read_proc(struct file *filp, char *user_buf, size_t count, loff_t
     if (count >= length) {
         count = length;
     }
-    error = copy_to_user(user_buf, buf, count);	
+    error = copy_to_user(user_buf, buf, count);
     if (error) {
 	return error;
     }
     return count;
 }
-

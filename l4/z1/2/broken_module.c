@@ -5,8 +5,8 @@ char *mybuf=NULL;
 int mybuf_size=100;
 
 int fill_buffer(char* buf, int buf_size) {
-    sprintf(mybuf, "I've created a buffer of size: %d\n", buf_size);
-    return strlen(mybuf);
+    sprintf(buf, "I've created a buffer of size: %d\n", buf_size);
+    return strlen(buf);
 }
 
 int broken_init(void) {

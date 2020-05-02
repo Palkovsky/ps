@@ -58,7 +58,7 @@ ssize_t broken_read(struct file *filp, char *user_buf, size_t count, loff_t *f_p
 
     len = strlen(mybuf);
     err = copy_to_user(user_buf, mybuf, len);
-    kfree(user_buf);
+    kfree(mybuf);
 
     read_count++;
 

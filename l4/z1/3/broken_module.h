@@ -37,7 +37,7 @@ module_init(broken_init);
 module_exit(broken_exit);
 
 /* Zmienne globalne */
-int broken_major = 899;
+int broken_major = 500;
 int read_count = 0;
 int write_count = 0;
 char *buf;
