@@ -639,3 +639,19 @@ $
 #+end_src
 
 * Zadanie 2 - GDB
+Aby debugger działał w pełni(breakpointy, odpowiednie liczenie adresów symboli) trzeba wyłączyć randomizowanie adresu ładowania:
+#+begin_src 
+CONFIG_RANDOMIZE_BASE=n
+#+end_src
+
+Jako obraz używam Debiana.
+#+begin_src  bash
+qemu-system-x86_64 -kernel arch/x86_64/boot/bzImage -initrd initramfs.img  -drive format=raw,media=disk,file=debian-rootfs.img -append 'root=/dev/sda' -s 
+#+end_src
+
+** Sanity check
+   Zakładamy breakpoint ~b urandom_read~ i próbujemy uruchomić ~cat /dev/urandom~.
+   [[./imgs/1.png]]
+
+   Wygląda na to, że wszystko działa. 
+   Z ~CONFIG_RANDOMIZE_BASE=y~ adresy syboli były nieoporawnie liczone i nie dało się efektywnie deubogować.
