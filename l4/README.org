@@ -655,3 +655,101 @@ qemu-system-x86_64 -kernel arch/x86_64/boot/bzImage -initrd initramfs.img  -driv
 
    Wygląda na to, że wszystko działa. 
    Z ~CONFIG_RANDOMIZE_BASE=y~ adresy syboli były nieoporawnie liczone i nie dało się efektywnie deubogować.
+
+** /proc/loadavg
+   Wykonuję ~cat /proc/loadavg~ i w callstacku lokalizuję funkcję, która może być przyczyną.
+
+   [[./imgs/2a1.png]]
+   [[./imgs/2a2.png]]
+
+   Z powyższych zgaduję, że funkcja ~loadavg_proc_show~ wywołuje ~seq_printf~ z nieporawnym parametrem.
+   ~seq_printf~ najprawdopodobniej w środku wywołuje ~seq_vprintf~.
+
+   Zakładam breakpointy na ~loadavg_proc_show~ i ~seq_vprintf~.
+
+   [[./imgs/2a3.png]]
+
+
+   Faktycznie znajduje się tam wywołanie ~seq_printf~.
+   Kontynujemy do kolejnego breakpointa czyli ~seq_vprintf~:
+
+   [[./imgs/2a4.png]]
+
+   I faktycznie, pierwszy argument to wskaźnik wskazujący na adres 0x1.
+   Przy próbuje dereferencji dostajemy OOPSa.
+
+   W takim razie bug musi być spowodowany złym wywołaniem ~seq_printf~, przyjrzyjmy się argumentom wywołania ~loadavg_proc_show~:
+   
+   [[./imgs/2a6.png]]
+
+   [[./imgs/2a5.png]]
+
+   Bug był spowodowany przez wywołanie ~seq_printf~ w ~loadavg_proc_show~ z argumentem ~v~ zamiast ~m~.
+
+** /proc/self/fd
+   Powyższy katalog w zdrowym systemie powinien zawierać linki do plików(lub innych bytów identyfikowanych przez deskryptory) otwartych w danym momencie przez dany proces.
+
+   [[./imgs/2b1.png]]
+   [[./imgs/2b2.png]]
+
+
+   Musi być coś nie tak z pobieraniem nazw.
+
+   Ponieważ nie wiem czego się chwycić zakładam endpoint na ~proc_readfd_common~.
+
+   Przy próbie wykonaniu ~ls /proc/self/fd~ trafiamy do wspomianej funkcji.
+   Zaznaczony fragment kodu jest najprawdopodobniej odpowiedzialny za wczytanie nazw.
+
+   [[./imgs/2b3.png]]
+
+   Pomysł jest następujący: przestepować do ~snprintf(name, len, "%u", fd)~ i sprawdzić co jest w buforze ~name~.
+
+   W buforze znajduje się jednoznakowy C-string: 0x06, czyli jakiś śmieć.
+   Spodziewam się wartości: 0x30, 0x31, 0x32, ..., 0x39 czyli takich które reprezentują cyfry - identyfikatory deskryptorów.
+
+   [[./imgs/2b4.png]]
+
+   Spróbuję podmienić name na ASCII string "0" i zobaczyć co się wyświetli.
+
+   [[./imgs/2b5.png]]
+
+   [[./imgs/2b6.png]]
+   
+
+   Czyli potwierdziliśmy, że coś jest nie tak z wartością name.
+
+   Po oględzinach ciała funkcji ~proc_readfd_common~ można zauważyć, że len zawsze wynosi zero.
+   W takim razie drugi argument ~snprintf~ zawsze jest równy zero, więc nic nie jest zapisywane do buforu.
+   To jest przyczyną tego buga.
+
+   Czemu wyświetlają się ~?~, ponieważ 0x06 to symbol ASCII(ACK), który nie ma graficznej reprezentacji.
+
+** /proc/self/environ
+   ~cat /proc/self/environ~ powinno wyświetlić zmienne środowiskowe danego procesu.
+
+   [[./imgs/2c1.png]]
+
+
+   Zakładam breakpoint na funkcję ~environ_read~ i nextuję po niej.
+
+   [[./imgs/2c2.png]]
+
+   Program od razu wyskakuje z pętli while, za sprawą ifa: ~if (src >= (env_end - env_start))~.
+   W praktyce ten if wygląda: ~if (src>=0)~, gdzie ~src~ jest typu unsigned, więc warunek zawsze prawdziwy.
+
+   [[./imgs/2c3.png]]
+
+
+** /proc/self/environ - wiele razy
+
+   Po kilkukrotnym scatowaniu environa, zaczynamy otrzymywać błąd:
+
+   [[./imgs/2d1.png]]
+
+   Tym razem program kończy się nieudaną alokacją za pomocą ​_​_get​_free​_pages(GFP​_ATOMIC, 10).
+
+   [[./imgs/2d2.png]]
+
+   Wygląda na to, że na końcu funkcji brakuje zwolnienia pamięci.
+
+   [[./imgs/2d3.png]]
