@@ -1,0 +1,9 @@
+#+TITLE: Programowanie systemowe - Synchronizacja
+#+SUBTITLE: Dawid Macek
+#+LANGUAGE: pl
+#+OPTIONS: date:nil
+#+OPTIONS: toc:nil
+#+OPTIONS: num:nil
+#+OPTIONS: html-postamble:nil
+#+HTML_HEAD: <style>pre.src {background-color: #303030; color: #e5e5e5;}</style>
+
