@@ -9,6 +9,9 @@
 #include <linux/list.h>
 #include <linux/seq_file.h>
 #include <linux/delay.h>
+#include <linux/rculist.h>
+#include <linux/mutex.h>
+
 
 MODULE_LICENSE("GPL");
 
@@ -31,10 +34,13 @@ struct data {
 	size_t length;
 	char contents[INTERNAL_SIZE];
 	struct list_head list;
+  struct rcu_head rcu;
 };
 
 LIST_HEAD(buffer);
 size_t total_length;
+
+DEFINE_MUTEX(lock);
 
 static int __init linked_init(void)
 {
@@ -108,7 +114,9 @@ ssize_t linked_read(struct file *filp, char __user *user_buf,
 	if (list_empty(&buffer))
 		printk(KERN_DEBUG "linked: empty list\n");
 
-	list_for_each_entry(data, &buffer, list) {
+  rcu_read_lock();
+
+	list_for_each_entry_rcu(data, &buffer, list) {
 		size_t to_copy = min(data->length, count - copied);
 
 		printk(KERN_DEBUG "linked: elem=[%zd]<%*pE>\n",
@@ -124,7 +132,8 @@ ssize_t linked_read(struct file *filp, char __user *user_buf,
 
 		if (copy_to_user(user_buf + copied, data->contents, to_copy)) {
 			printk(KERN_WARNING "linked: could not copy data to user\n");
-			return -EFAULT;
+      rcu_read_unlock();
+      return -EFAULT;
 		}
 		copied += to_copy;
 		pos += to_copy;
@@ -133,22 +142,29 @@ ssize_t linked_read(struct file *filp, char __user *user_buf,
 		if (copied >= count)
 			break;
 	}
+
 	printk(KERN_WARNING "linked: copied=%zd real_length=%zd\n",
 		copied, real_length);
+
 	*f_pos += real_length;
 	read_count++;
+  rcu_read_unlock();
+
 	return copied;
 }
 
 ssize_t linked_write(struct file *filp, const char __user *user_buf,
 	size_t count, loff_t *f_pos)
 {
-	struct data *data;
+	struct data *data = NULL, *data_head = NULL;
 	ssize_t result = 0;
 	size_t i = 0;
 
 	printk(KERN_WARNING "linked: write, count=%zu f_pos=%lld\n",
 		count, *f_pos);
+
+	if (list_empty(&buffer))
+		printk(KERN_DEBUG "linked: empty list\n");
 
 	for (i = 0; i < count; i += INTERNAL_SIZE) {
 		size_t to_copy = min((size_t) INTERNAL_SIZE, count - i);
@@ -159,6 +175,7 @@ ssize_t linked_write(struct file *filp, const char __user *user_buf,
 			goto err_data;
 		}
 		data->length = to_copy;
+    INIT_LIST_HEAD_RCU(&data->list);
 
 		if (copy_from_user(data->contents, user_buf + i, to_copy)) {
 			result = -EFAULT;
@@ -169,11 +186,22 @@ ssize_t linked_write(struct file *filp, const char __user *user_buf,
 			result = count;
 			goto err_contents;
 		}
-		list_add_tail(&(data->list), &buffer);
+
+    if(data_head)
+      list_add_tail_rcu(&data->list, &data_head->list);
+    else
+      data_head = data;
+
 		total_length += to_copy;
 		*f_pos += to_copy;
 		mdelay(10);
 	}
+
+  if(data_head) {
+    mutex_lock(&lock);
+    list_splice_tail_init_rcu(&data_head->list, &buffer, synchronize_rcu);
+    mutex_unlock(&lock);
+  }
 
 	write_count++;
 	return count;

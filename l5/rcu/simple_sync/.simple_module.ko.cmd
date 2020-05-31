@@ -1,1 +1,0 @@
-cmd_/mnt/hgfs/F/AGh/PS/l5/rcu/simple_sync/simple_module.ko := ld -r -m elf_x86_64  -z max-page-size=0x200000 --build-id  -T ./scripts/module-common.lds -o /mnt/hgfs/F/AGh/PS/l5/rcu/simple_sync/simple_module.ko /mnt/hgfs/F/AGh/PS/l5/rcu/simple_sync/simple_module.o /mnt/hgfs/F/AGh/PS/l5/rcu/simple_sync/simple_module.mod.o;  true

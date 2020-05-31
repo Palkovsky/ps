@@ -9,6 +9,7 @@
 #include <linux/list.h>
 #include <linux/seq_file.h>
 #include <linux/delay.h>
+#include <linux/mutex.h>
 
 MODULE_LICENSE("GPL");
 
@@ -35,6 +36,8 @@ struct data {
 
 LIST_HEAD(buffer);
 size_t total_length;
+
+DEFINE_MUTEX(mutex);
 
 static int __init linked_init(void)
 {
@@ -98,12 +101,15 @@ ssize_t linked_read(struct file *filp, char __user *user_buf,
 	size_t pos = 0;
 	size_t copied = 0;
 	size_t real_length = 0;
+  ssize_t result;
 
 	printk(KERN_WARNING "linked: read, count=%zu f_pos=%lld\n",
 		count, *f_pos);
 
 	if (*f_pos > total_length)
 		return 0;
+
+  mutex_lock(&mutex);
 
 	if (list_empty(&buffer))
 		printk(KERN_DEBUG "linked: empty list\n");
@@ -124,7 +130,8 @@ ssize_t linked_read(struct file *filp, char __user *user_buf,
 
 		if (copy_to_user(user_buf + copied, data->contents, to_copy)) {
 			printk(KERN_WARNING "linked: could not copy data to user\n");
-			return -EFAULT;
+      result = -EFAULT;
+			goto err;
 		}
 		copied += to_copy;
 		pos += to_copy;
@@ -135,9 +142,16 @@ ssize_t linked_read(struct file *filp, char __user *user_buf,
 	}
 	printk(KERN_WARNING "linked: copied=%zd real_length=%zd\n",
 		copied, real_length);
-	*f_pos += real_length;
+
+  *f_pos += real_length;
 	read_count++;
-	return copied;
+  mutex_unlock(&mutex);
+
+  return copied;
+
+ err:
+  mutex_unlock(&mutex);
+  return result;
 }
 
 ssize_t linked_write(struct file *filp, const char __user *user_buf,
@@ -149,6 +163,8 @@ ssize_t linked_write(struct file *filp, const char __user *user_buf,
 
 	printk(KERN_WARNING "linked: write, count=%zu f_pos=%lld\n",
 		count, *f_pos);
+
+  mutex_lock(&mutex);
 
 	for (i = 0; i < count; i += INTERNAL_SIZE) {
 		size_t to_copy = min((size_t) INTERNAL_SIZE, count - i);
@@ -175,10 +191,13 @@ ssize_t linked_write(struct file *filp, const char __user *user_buf,
 		mdelay(10);
 	}
 
+  mutex_unlock(&mutex);
+
 	write_count++;
 	return count;
 
 err_contents:
+  mutex_unlock(&mutex);
 	kfree(data);
 err_data:
 	return result;

@@ -9,6 +9,7 @@
 #include <linux/list.h>
 #include <linux/seq_file.h>
 #include <linux/delay.h>
+#include <linux/spinlock.h>
 
 MODULE_LICENSE("GPL");
 
@@ -36,9 +37,13 @@ struct data {
 LIST_HEAD(buffer);
 size_t total_length;
 
+DEFINE_SPINLOCK(spinlock);
+
 static int __init linked_init(void)
 {
 	int result = 0;
+
+  spin_lock_init(&spinlock);
 
 	proc_entry = proc_create("linked", 0444, NULL, &proc_ops);
 	if (!proc_entry) {
@@ -124,7 +129,7 @@ ssize_t linked_read(struct file *filp, char __user *user_buf,
 
 		if (copy_to_user(user_buf + copied, data->contents, to_copy)) {
 			printk(KERN_WARNING "linked: could not copy data to user\n");
-			return -EFAULT;
+      return -EFAULT;
 		}
 		copied += to_copy;
 		pos += to_copy;
@@ -135,6 +140,7 @@ ssize_t linked_read(struct file *filp, char __user *user_buf,
 	}
 	printk(KERN_WARNING "linked: copied=%zd real_length=%zd\n",
 		copied, real_length);
+
 	*f_pos += real_length;
 	read_count++;
 	return copied;
@@ -149,6 +155,11 @@ ssize_t linked_write(struct file *filp, const char __user *user_buf,
 
 	printk(KERN_WARNING "linked: write, count=%zu f_pos=%lld\n",
 		count, *f_pos);
+
+  spin_lock(&spinlock);
+
+	if (list_empty(&buffer))
+		printk(KERN_DEBUG "linked: empty list\n");
 
 	for (i = 0; i < count; i += INTERNAL_SIZE) {
 		size_t to_copy = min((size_t) INTERNAL_SIZE, count - i);
@@ -175,10 +186,12 @@ ssize_t linked_write(struct file *filp, const char __user *user_buf,
 		mdelay(10);
 	}
 
+  spin_unlock(&spinlock);
 	write_count++;
 	return count;
 
 err_contents:
+  spin_unlock(&spinlock);
 	kfree(data);
 err_data:
 	return result;

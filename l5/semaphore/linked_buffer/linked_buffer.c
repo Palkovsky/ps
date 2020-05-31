@@ -9,6 +9,7 @@
 #include <linux/list.h>
 #include <linux/seq_file.h>
 #include <linux/delay.h>
+#include <linux/semaphore.h>
 
 MODULE_LICENSE("GPL");
 
@@ -36,9 +37,13 @@ struct data {
 LIST_HEAD(buffer);
 size_t total_length;
 
+static struct semaphore sem;
+
 static int __init linked_init(void)
 {
 	int result = 0;
+
+  sema_init(&sem, 1);
 
 	proc_entry = proc_create("linked", 0444, NULL, &proc_ops);
 	if (!proc_entry) {
@@ -98,12 +103,19 @@ ssize_t linked_read(struct file *filp, char __user *user_buf,
 	size_t pos = 0;
 	size_t copied = 0;
 	size_t real_length = 0;
+  ssize_t result;
 
 	printk(KERN_WARNING "linked: read, count=%zu f_pos=%lld\n",
 		count, *f_pos);
 
 	if (*f_pos > total_length)
 		return 0;
+
+  // Down
+  if (down_interruptible(&sem)) {
+    printk(KERN_ERR "SIMPLE: Interrupted.\n");
+    return -EINTR;
+  }
 
 	if (list_empty(&buffer))
 		printk(KERN_DEBUG "linked: empty list\n");
@@ -124,7 +136,8 @@ ssize_t linked_read(struct file *filp, char __user *user_buf,
 
 		if (copy_to_user(user_buf + copied, data->contents, to_copy)) {
 			printk(KERN_WARNING "linked: could not copy data to user\n");
-			return -EFAULT;
+			result = -EFAULT;
+      goto err;
 		}
 		copied += to_copy;
 		pos += to_copy;
@@ -135,9 +148,16 @@ ssize_t linked_read(struct file *filp, char __user *user_buf,
 	}
 	printk(KERN_WARNING "linked: copied=%zd real_length=%zd\n",
 		copied, real_length);
+
 	*f_pos += real_length;
 	read_count++;
-	return copied;
+
+  up(&sem);
+  return copied;
+
+ err:
+  up(&sem);
+  return result;
 }
 
 ssize_t linked_write(struct file *filp, const char __user *user_buf,
@@ -149,6 +169,12 @@ ssize_t linked_write(struct file *filp, const char __user *user_buf,
 
 	printk(KERN_WARNING "linked: write, count=%zu f_pos=%lld\n",
 		count, *f_pos);
+
+  // Down
+  if (down_interruptible(&sem)) {
+    printk(KERN_ERR "SIMPLE: Interrupted.\n");
+    return -EINTR;
+  }
 
 	for (i = 0; i < count; i += INTERNAL_SIZE) {
 		size_t to_copy = min((size_t) INTERNAL_SIZE, count - i);
@@ -175,10 +201,15 @@ ssize_t linked_write(struct file *filp, const char __user *user_buf,
 		mdelay(10);
 	}
 
+  // Up
+  up(&sem);
+
 	write_count++;
 	return count;
 
 err_contents:
+  // Up on error
+  up(&sem);
 	kfree(data);
 err_data:
 	return result;
