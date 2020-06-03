@@ -1,8 +1,11 @@
 #include <linux/linkage.h>
 #include <linux/kernel.h>
+#include <linux/syscalls.h>
 
-asmlinkage long sys_mysyscall(void)
+SYSCALL_DEFINE0(mysyscall)
 {
-  printk (KERN_EMERG "Hura! Moge napisac 'Hello world' z wnetrza jadra!\n");
+  printk(KERN_EMERG "sys_mysyscall\n");
   return 0;
 }
+
+

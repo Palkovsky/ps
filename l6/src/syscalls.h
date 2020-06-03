@@ -324,6 +324,11 @@ asmlinkage long sys_io_uring_register(unsigned int fd, unsigned int op,
 
 /* mysyscalls/_.c  */
 asmlinkage long sys_mysyscall(void);
+asmlinkage long sys_topuser(uid_t *);
+asmlinkage long sys_timeuser(uid_t *);
+asmlinkage long sys_kernelps(size_t *, char *);
+asmlinkage long sys_freeblocks(char *, u64 *);
+asmlinkage long sys_pidtoname(pid_t, char *);
 
 /* fs/xattr.c */
 asmlinkage long sys_setxattr(const char __user *path, const char __user *name,

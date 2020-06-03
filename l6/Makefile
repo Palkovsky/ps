@@ -2,9 +2,10 @@ LINUX_VER=5.4.43
 KERN_DIR=kernel/
 HOSTNAME=andrzejek-pici
 
-.PHONY: default build kernel rootfs run clean
+.PHONY: default build config kernel rootfs run clean
 
 default:
+	$(MAKE) -C . config
 	$(MAKE) -C . build
 
 # Compiles QEMU-bootable kernel.
@@ -13,10 +14,13 @@ build:
 	cp -f src/syscall_64.tbl $(KERN_DIR)arch/x86/entry/syscalls/
 	cp -f src/Makefile $(KERN_DIR)Makefile
 	cp -rf src/mysyscalls $(KERN_DIR)
+	$(MAKE) -C $(KERN_DIR) -j16
+
+# Updates kernel config.
+config:
 	$(MAKE) -C $(KERN_DIR) defconfig
 	$(MAKE) -C $(KERN_DIR) kvmconfig
 	sed -i -E 's/(CONFIG_DEFAULT_HOSTNAME)=.*/\1="$(HOSTNAME)"/g' $(KERN_DIR).config
-	$(MAKE) -C $(KERN_DIR) -j8
 
 # Downloads and extracts Linux kernel.
 kernel:
@@ -32,7 +36,7 @@ rootfs:
 		--chroot "echo -e 'user\nuser' | busybox adduser -s /bin/ash user" \
 		--after "mv test /mnt/home/user/test"
 
-# Start QEMU emulator
+# Boot up compiled kernel in QEMU
 run:
 	qemu-system-x86_64 \
 		-m 1024 \
@@ -40,5 +44,6 @@ run:
 		-drive format=raw,media=disk,file=rootfs.img \
 		-append "root=/dev/sda"
 
+# Burn it down
 clean:
 	rm -rf *.tar.* *.img $(KERN_DIR) linux-* rootfs

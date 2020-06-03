@@ -359,7 +359,12 @@
 435	common	clone3			__x64_sys_clone3/ptregs
 
 # ---- CUSTOM SYSCALLS ----
-436 common  mysyscall   sys_mysyscall
+436 common  mysyscall   __x64_sys_mysyscall
+440 common  topuser     __x64_sys_topuser
+441 common  timeuser    __x64_sys_timeuser
+442 common  kernelps    __x64_sys_kernelps
+443 common  freeblocks  __x64_sys_freeblocks
+444 common  pidtoname   __x64_sys_pidtoname
 
 #
 # x32-specific system call numbers start at 512 to avoid cache impact
