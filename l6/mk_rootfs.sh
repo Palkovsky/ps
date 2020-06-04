@@ -47,6 +47,10 @@ cp -r rootfs/* /mnt/
 # Run stuff inside chroot
 chroot /mnt /bin/sh <<EOF
 export PATH=$PATH:/bin/
+
+echo "::sysinit:/bin/mount -t proc none /proc" >> /etc/inittab
+echo "::sysinit:/bin/mount -t sysfs none /sys" >> /etc/inittab
+
 [ "$CHROOT_CMD" ] && /bin/ash -c "$CHROOT_CMD"
 EOF
 

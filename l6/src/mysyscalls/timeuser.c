@@ -44,7 +44,7 @@ SYSCALL_DEFINE1(timeuser, uid_t __user*, uid)
   long err = 0;
 
   if((err = uidtask_lookup(&conf, &result))) {
-    printk (KERN_EMERG "[sys_timeuser]: Unable to find UID..\n");
+    printk (KERN_EMERG "[sys_timeuser]: Unable to find UID.\n");
     err = -EFAULT;
     goto ret;
   }

@@ -11,7 +11,7 @@
 #define SYS_FREEBLOCKSS 443
 #define SYS_PIDTONAME   444
 
-#define LOG(fmt, ...) printf("[%s] " #fmt "\n", __func__, ##__VA_ARGS__)
+#define LOG(fmt, ...) printf("[%s] " fmt "\n", __func__, ##__VA_ARGS__)
 
 static long result;
 
@@ -46,38 +46,89 @@ static long timeuser(void) {
 
 static long kernelps(void) {
   size_t sz;
-  char buff[1<<8];
-  if((result = syscall(SYS_KERNELPS, &sz, buff, 1))) {
-    LOG("FAILED");
-    return result;
+  char buff[1<<20];
+
+  // buff=NULL case
+  if((result = syscall(SYS_KERNELPS, &sz, NULL))) {
+    LOG("buff=NULL FAILED with %d", result);
+  } else {
+    LOG("buff=NULL OK. Size: %ld", sz);
   }
-  LOG("OK");
+
+  if((result = syscall(SYS_KERNELPS, &sz, buff))) {
+    LOG("buff!=NULL FAILED with %d", result);
+  } else {
+    // This prints in reverse.
+    while(sz--) {
+      LOG("%s", buff+sz*16);
+    }
+    LOG("buff!=NULL OK. Entries: %ld", sz);
+  }
+
   return 0;
 }
 
 static long freeblocks(void) {
-  const static char *filpath = "/dev/sda";
-  uint64_t avail_blocks;
-  if((result = syscall(SYS_FREEBLOCKSS, filpath, &avail_blocks))) {
+  char *filpath;
+  uint64_t avail;
+
+  filpath = "/dev/sda";
+  if((result = syscall(SYS_FREEBLOCKSS, filpath, &avail))) {
     LOG("FAILED");
-    return result;
+  } else {
+    LOG("OK. FREE BYTES on '%s': %lld", filpath, avail);
   }
-  LOG("OK");
+
+  filpath = "/sbin/init";
+  if((result = syscall(SYS_FREEBLOCKSS, filpath, &avail))) {
+    LOG("FAILED");
+  } else {
+    LOG("OK. FREE BYTES on '%s': %lld", filpath, avail);
+  }
+
+  filpath = "/sbin/initt";
+  if((result = syscall(SYS_FREEBLOCKSS, filpath, &avail))) {
+    LOG("OK EXPECTED ERROR: %d", result);
+  } else {
+    LOG("FAILED. ERROR EXPECTED");
+  }
+
+  LOG("TIP: To validate corectness use: 'df -B 1'");
+
   return 0;
 }
 
 static long pidtoname(void) {
-  pid_t pid = 1;
+  pid_t pid;
   char buff[1<<8];
+
+  pid = 1;
   if((result = syscall(SYS_PIDTONAME, pid, buff))) {
-    LOG("FAILED");
-    return result;
+    LOG("FAILED WITH %d", result);
+  } else {
+    // Should be init.
+    LOG("OK. PROC NAME: %s", buff);
   }
-  LOG("OK");
+
+  pid = getpid();
+  if((result = syscall(SYS_PIDTONAME, pid, buff))) {
+    LOG("FAILED WITH %d", result);
+  } else {
+    // Should be current process.
+    LOG("OK. PROC NAME: %s", buff);
+  }
+
+  pid = -1;
+  if((result = syscall(SYS_PIDTONAME, pid, buff))) {
+    LOG("OK EXPECTED RESULT %d", result);
+  } else {
+    LOG("FAILED EXPECTED ERROR");
+  }
+
   return 0;
 }
 
-int main() {
+int main(int argc, char **argv) {
   mysyscall();
   LOG("-------------");
   topuser();
@@ -90,5 +141,6 @@ int main() {
   LOG("-------------");
   pidtoname();
   LOG("-------------");
+  LOG("TIP: Use /Shift+PageUp/ to scroll in TTY.");
   return 0;
 }
