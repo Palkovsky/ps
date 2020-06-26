@@ -18,8 +18,6 @@ static long topuser_fold(uid_t *uid)
   u64 count = 0;
   struct uidtask *it;
 
-  // TODO: Emptiness check
-
   hash_for_each(UIDTASK_LOOKUP, bkt, it, node) {
     printk(KERN_EMERG "[topuser] UID: %d -> %lld\n", it->uid, it->acc);
     if(it->acc >= count) {
@@ -37,7 +35,6 @@ const static struct uidtask_lookup_conf conf =
    .present = topuser_present,
    .fold = topuser_fold
   };
-
 
 SYSCALL_DEFINE1(topuser, uid_t __user*, uid)
 {

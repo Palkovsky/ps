@@ -1,0 +1,28 @@
+* ~make kernel~
+  Downloads and extracts kernel.
+
+* ~make config~
+Depends on:
+- ~make kernel~
+
+  Applies ~make defconfig~ and ~make kvmconfig~ to the downloaded kernel.
+
+* ~make rootfs~
+  Builds Alpine Linux based rootfs image.
+
+* ~make build~
+Depends on:
+- ~make kernel~
+- ~make config~
+
+Compiles custom kernel with overwriten sources from ~src/~.
+
+* ~make run~
+Depends on:
+- ~make build~
+- ~make rootfs~
+
+Starts QEMU with compiled kernel and created rootfs.
+
+* ~make clean~
+  Burns it down.

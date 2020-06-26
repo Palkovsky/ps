@@ -10,11 +10,8 @@ default:
 
 # Compiles QEMU-bootable kernel.
 build:
-	cp -f src/syscalls.h $(KERN_DIR)include/linux/
-	cp -f src/syscall_64.tbl $(KERN_DIR)arch/x86/entry/syscalls/
-	cp -f src/Makefile $(KERN_DIR)Makefile
-	cp -rf src/mysyscalls $(KERN_DIR)
-	$(MAKE) -C $(KERN_DIR) -j16
+	cp -f src/fault.c $(KERN_DIR)arch/x86/mm/
+	$(MAKE) -C $(KERN_DIR) -j8
 
 # Updates kernel config.
 config:
@@ -31,10 +28,10 @@ kernel:
 
 # Prepares Alpine Linux based rootfs.
 rootfs:
-	gcc -static src/test.c -o ./test
+	$(MAKE) -C test/
 	sudo bash $(PWD)/mk_rootfs.sh \
 		--chroot "echo -e 'user\nuser' | busybox adduser -s /bin/ash user" \
-		--after "mv test /mnt/home/user/test"
+		--after "mv test/test /mnt/home/user/test"
 
 # Boot up compiled kernel in QEMU
 run:

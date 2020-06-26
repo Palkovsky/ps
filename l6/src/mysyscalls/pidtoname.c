@@ -9,12 +9,14 @@ SYSCALL_DEFINE2(pidtoname, pid_t, pid, char __user*, buffer)
   char *procname = NULL;
   struct task_struct *task;
 
+  rcu_read_lock();
   for_each_process(task) {
     if(task->pid == pid) {
       procname = (char*) &task->comm;
       break;
     }
   }
+  rcu_read_unlock();
 
   if(!procname) {
     printk(KERN_EMERG "[sys_pidtoname] Invalid PID.\n");

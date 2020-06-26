@@ -26,10 +26,8 @@ SYSCALL_DEFINE2(kernelps, size_t __user*, count, char __user*, buffer)
   if(!count)
     return -EFAULT;
 
-  bytes_avail = *count;
-
   rcu_read_lock();
-
+  bytes_avail = *count;
   bytes_required = taskcount()*BUFFSZ;
 
   if(!buffer) {
